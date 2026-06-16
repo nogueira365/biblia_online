@@ -1,5 +1,5 @@
 // app.js
-// Lógica principal do site Bíblia Online
+// Lógica principal do site Bíblia Live
 
 // Estado inicial da aplicação
 const state = {
@@ -1891,7 +1891,7 @@ function exportNotesToMarkdown() {
     return;
   }
   
-  let mdContent = `# Bíblia Online - Minhas Anotações e Estudos\n`;
+  let mdContent = `# Bíblia Live - Minhas Anotações e Estudos\n`;
   mdContent += `Exportado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
   mdContent += `---\n\n`;
   
@@ -2409,7 +2409,7 @@ async function renderVerseOfTheDay() {
  */
 async function shareVerse(verseText, refText, versionLbl) {
   const shareText  = `"${verseText}"\n— ${refText} (${versionLbl})`;
-  const shareTitle = `Bíblia Online — ${refText}`;
+  const shareTitle = `Bíblia Live — ${refText}`;
   const shareUrl   = window.location.href;
 
   if (navigator.share) {
