@@ -501,8 +501,8 @@ function initAuthUI() {
           showToast("Perfil atualizado com sucesso!", "success");
         } catch (error) {
           console.error("Erro ao salvar dados do perfil:", error);
-          showToast("Erro ao sincronizar dados com o Supabase.", "error");
-          updateSyncIndicator("online");
+          showToast("Erro: " + (error.message || "Erro ao sincronizar dados com o Supabase."), "error");
+          updateSyncIndicator("offline");
         }
       } else {
         showToast("Perfil salvo localmente!", "success");
@@ -1101,7 +1101,7 @@ async function cloudSavePreferences() {
   if (!supabase || !syncState.isLoggedIn) return;
   try {
     const userId = syncState.currentUser.id;
-    await supabase.from("user_preferences").upsert({
+    const payload = {
       user_id: userId,
       theme: state.theme,
       font_family: state.fontFamily,
@@ -1114,9 +1114,18 @@ async function cloudSavePreferences() {
       birth_date: state.birthDate || null,
       marital_status: state.maritalStatus || null,
       gender: state.gender || null
-    }, { onConflict: "user_id" });
+    };
+    
+    const { data, error } = await supabase.from("user_preferences").upsert(payload, { onConflict: "user_id" });
+    
+    if (error) {
+      console.error("Supabase Error ao salvar prefs:", error);
+      alert("Erro do Banco de Dados: " + error.message + " (Detalhes: " + error.details + ")");
+      throw error;
+    }
   } catch (error) {
     console.error("Erro ao salvar preferências visuais na nuvem:", error);
+    throw error;
   }
 }
 
