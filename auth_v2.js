@@ -1116,12 +1116,17 @@ async function cloudSavePreferences() {
       gender: state.gender || null
     };
     
-    const { data, error } = await supabase.from("user_preferences").upsert(payload, { onConflict: "user_id" });
+    const { data, error } = await supabase.from("user_preferences").upsert(payload, { onConflict: "user_id" }).select();
     
     if (error) {
       console.error("Supabase Error ao salvar prefs:", error);
       alert("Erro do Banco de Dados: " + error.message + " (Detalhes: " + error.details + ")");
       throw error;
+    }
+
+    if (data && data.length > 0) {
+      console.log("Upsert Success Data:", data[0]);
+      alert("Supabase salvou: Nome = " + data[0].full_name + " | Avatar_Url existe? " + !!data[0].avatar_url);
     }
   } catch (error) {
     console.error("Erro ao salvar preferências visuais na nuvem:", error);
