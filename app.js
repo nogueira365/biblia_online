@@ -47,6 +47,20 @@ document.addEventListener("DOMContentLoaded", () => {
   // Inicializa os dropdowns customizados (substitui <select> nativos)
   if (typeof initCustomSelects === "function") initCustomSelects();
   loadActiveChapter();
+
+  // Landing Page — Botão "Começar a Ler"
+  const btnEnterApp = document.getElementById("btn-enter-app");
+  if (btnEnterApp) {
+    btnEnterApp.addEventListener("click", () => {
+      const landingPage = document.getElementById("landing-page");
+      if (landingPage) {
+        landingPage.classList.add("landing-exit");
+        setTimeout(() => {
+          landingPage.remove();
+        }, 650);
+      }
+    });
+  }
 });
 
 
