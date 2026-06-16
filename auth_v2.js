@@ -979,7 +979,16 @@ async function pullDataFromCloud(userId) {
 
   // 6. Buscar Preferências do Usuário
   const { data: pref, error } = await supabase.from("user_preferences").select("theme, font_family, font_size, current_translation, avatar_url, full_name, bio, social_name, birth_date, marital_status, gender").eq("user_id", userId).maybeSingle();
+  
+  if (error) {
+    alert("Erro ao puxar dados: " + error.message);
+  }
+
   if (pref) {
+    // Alerta de debug para ver o que veio da nuvem ao carregar a página
+    // Remover depois!
+    alert("Ao carregar a página, Supabase retornou o Nome: " + pref.full_name);
+
     state.theme = pref.theme || state.theme;
     state.fontFamily = pref.font_family || state.fontFamily;
     state.fontSize = pref.font_size || state.fontSize;
