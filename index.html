@@ -170,6 +170,14 @@
           <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v2h-5zm-4 0h2v2H8zm4 4h5v2h-5zm-4 0h2v2H8z"/>
         </svg>
       </button>
+
+      <!-- Botão Admin (Visível apenas para administradores) -->
+      <button id="btn-admin" class="btn-icon" title="Painel Administrativo" aria-label="Painel Admin" style="display: none;">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+        </svg>
+        <span id="admin-badge" class="admin-badge" style="display: none;">0</span>
+      </button>
       
       <!-- Botão de Autenticação e Menu de Usuário (Supabase) -->
       <div id="auth-header-container" class="auth-header-container">
@@ -745,6 +753,74 @@
 
   <!-- Toast Container para avisos do sistema -->
   <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+  <!-- ==================== TELA DE AGUARDANDO APROVAÇÃO ==================== -->
+  <div id="pending-approval-screen" class="pending-approval-screen" style="display: none;">
+    <div class="pending-content">
+      <div class="pending-icon-wrap">
+        <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      </div>
+      <h2 class="pending-title">Aguardando Aprovação</h2>
+      <p class="pending-description">Sua conta foi criada com sucesso! No entanto, o acesso à Bíblia Live precisa ser aprovado pelo administrador.</p>
+      <p class="pending-description" style="font-size: 13px; margin-top: 8px;">Assim que sua conta for aprovada, você receberá acesso completo à plataforma. Enquanto isso, aguarde com paciência.</p>
+      <div class="pending-email" id="pending-user-email"></div>
+      <button id="btn-pending-logout" class="pending-logout-btn">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        Sair da Conta
+      </button>
+      <p class="pending-verse">"Esperei com paciência no Senhor, e ele se inclinou para mim, e ouviu o meu clamor."<br><em>— Salmos 40:1</em></p>
+    </div>
+  </div>
+
+  <!-- ==================== GAVETA ADMIN (PAINEL DE APROVAÇÃO) ==================== -->
+  <div id="admin-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Painel Administrativo</h3>
+      <button class="btn-icon drawer-close" aria-label="Fechar painel admin">✕</button>
+    </div>
+    <div class="drawer-body">
+      <!-- Contadores -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+        <div class="admin-stat-card">
+          <div id="admin-stat-pending" class="admin-stat-number" style="color: #f59e0b;">0</div>
+          <div class="admin-stat-label">Pendentes</div>
+        </div>
+        <div class="admin-stat-card">
+          <div id="admin-stat-approved" class="admin-stat-number" style="color: #10b981;">0</div>
+          <div class="admin-stat-label">Aprovados</div>
+        </div>
+        <div class="admin-stat-card">
+          <div id="admin-stat-rejected" class="admin-stat-number" style="color: #ef4444;">0</div>
+          <div class="admin-stat-label">Rejeitados</div>
+        </div>
+      </div>
+
+      <!-- Lista de Pendentes -->
+      <div style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        Usuários Pendentes
+      </div>
+      <div id="admin-pending-list" class="admin-users-list">
+        <div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário pendente</div>
+      </div>
+
+      <!-- Lista de Aprovados -->
+      <div style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px; margin-top: 20px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        Usuários Aprovados
+      </div>
+      <div id="admin-approved-list" class="admin-users-list">
+        <div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário aprovado</div>
+      </div>
+    </div>
+  </div>
 
 </body>
 </html>

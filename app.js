@@ -52,6 +52,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnEnterApp = document.getElementById("btn-enter-app");
   if (btnEnterApp) {
     btnEnterApp.addEventListener("click", () => {
+      // Verifica se o usuário está logado
+      if (typeof syncState !== "undefined" && !syncState.isLoggedIn) {
+        showToast("Por favor, crie uma conta ou faça login para continuar.", "error");
+        
+        // Abre o modal de autenticação (se a função existir globalmente ou clicando no botão)
+        const btnAuth = document.getElementById("btn-auth");
+        if (btnAuth) {
+          btnAuth.click(); // Dispara o clique para abrir o modal de login/cadastro
+        }
+        return; // Interrompe a execução, não esconde a landing page
+      }
+
+      // Se estiver logado, prossegue removendo a landing page
       const landingPage = document.getElementById("landing-page");
       if (landingPage) {
         landingPage.classList.add("landing-exit");

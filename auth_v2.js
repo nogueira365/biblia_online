@@ -1,11 +1,16 @@
 // auth.js
 // Lógica de Autenticação (Supabase Auth) e Sincronização de Dados na Nuvem
 
+// E-mail do administrador (único com poder de aprovar usuários)
+const ADMIN_EMAIL = "nogueira.analytics@gmail.com";
+
 // Estado de sincronização atual
 const syncState = {
   isLoggedIn: false,
   currentUser: null,
-  syncPendingCount: 0
+  syncPendingCount: 0,
+  isApproved: false,
+  isAdmin: false
 };
 
 let birthdatePicker = null;
@@ -654,6 +659,7 @@ function listenToAuthChanges() {
     if (session) {
       syncState.isLoggedIn = true;
       syncState.currentUser = session.user;
+      syncState.isAdmin = (session.user.email === ADMIN_EMAIL);
       
       // Atualizar UI do cabeçalho
       const userEmailEl = document.getElementById("user-email");
@@ -665,21 +671,43 @@ function listenToAuthChanges() {
       updateSyncIndicator("working");
       
       try {
-        // 1. Sincronizar / Carregar dados da nuvem
-        await syncCloudData();
-        updateSyncIndicator("online");
+        // Verificar se o usuário tem registro de aprovação
+        const approvalStatus = await checkUserApproval(session.user);
+        
+        if (approvalStatus === "approved") {
+          syncState.isApproved = true;
+          hidePendingScreen();
+          
+          // Sincronizar / Carregar dados da nuvem
+          await syncCloudData();
+          updateSyncIndicator("online");
+          
+          // Se for admin, mostrar botão e carregar painel
+          if (syncState.isAdmin) {
+            showAdminButton();
+          }
+        } else {
+          // Usuário pendente ou rejeitado
+          syncState.isApproved = false;
+          showPendingScreen(session.user.email);
+          updateSyncIndicator("offline");
+        }
       } catch (err) {
-        console.error("Erro durante a sincronização inicial:", err);
+        console.error("Erro durante a verificação de aprovação:", err);
         updateSyncIndicator("offline");
       }
     } else {
       syncState.isLoggedIn = false;
       syncState.currentUser = null;
+      syncState.isApproved = false;
+      syncState.isAdmin = false;
       
       const btnAuth = document.getElementById("btn-auth");
       if (btnAuth) btnAuth.title = "Entrar / Criar Conta";
 
       updateSyncIndicator("offline");
+      hidePendingScreen();
+      hideAdminButton();
       
       // Se acabou de deslogar (SIGNED_OUT), recarregar a página para limpar o estado em memória
       if (event === "SIGNED_OUT") {
@@ -1223,3 +1251,238 @@ function setupCustomFlatpickrHeader(instance) {
   }
 }
 
+// ==========================================================================
+// SISTEMA DE APROVAÇÃO DE USUÁRIOS
+// ==========================================================================
+
+// Verifica o status de aprovação do usuário. Se não existir registro, cria um como 'pending'.
+async function checkUserApproval(user) {
+  if (!supabase || !user) return "pending";
+  
+  // Admin é sempre aprovado
+  if (user.email === ADMIN_EMAIL) return "approved";
+  
+  try {
+    // Verificar se já existe um registro de aprovação
+    const { data, error } = await supabase
+      .from("user_approvals")
+      .select("status")
+      .eq("user_id", user.id)
+      .single();
+    
+    if (error && error.code === "PGRST116") {
+      // Não encontrou registro — criar um novo como 'pending'
+      await supabase.from("user_approvals").insert({
+        user_id: user.id,
+        email: user.email,
+        status: "pending"
+      });
+      return "pending";
+    }
+    
+    if (error) {
+      console.error("Erro ao verificar aprovação:", error);
+      return "pending";
+    }
+    
+    return data.status || "pending";
+  } catch (err) {
+    console.error("Erro inesperado ao verificar aprovação:", err);
+    return "pending";
+  }
+}
+
+// Mostra a tela de "Aguardando Aprovação"
+function showPendingScreen(email) {
+  const screen = document.getElementById("pending-approval-screen");
+  if (screen) {
+    screen.style.display = "flex";
+    const emailEl = document.getElementById("pending-user-email");
+    if (emailEl) emailEl.textContent = email;
+  }
+  
+  // Botão de logout na tela de pendente
+  const btnPendingLogout = document.getElementById("btn-pending-logout");
+  if (btnPendingLogout) {
+    btnPendingLogout.onclick = async () => {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error("Erro ao sair:", e);
+      }
+    };
+  }
+}
+
+// Esconde a tela de "Aguardando Aprovação"
+function hidePendingScreen() {
+  const screen = document.getElementById("pending-approval-screen");
+  if (screen) screen.style.display = "none";
+}
+
+// ==========================================================================
+// PAINEL ADMINISTRATIVO
+// ==========================================================================
+
+function showAdminButton() {
+  const btnAdmin = document.getElementById("btn-admin");
+  if (btnAdmin) {
+    btnAdmin.style.display = "flex";
+    btnAdmin.addEventListener("click", () => {
+      if (typeof openDrawer === "function") {
+        openDrawer("admin-drawer");
+      }
+      loadAdminPanel();
+    });
+  }
+  // Carregar contagem de pendentes
+  loadAdminPendingCount();
+}
+
+function hideAdminButton() {
+  const btnAdmin = document.getElementById("btn-admin");
+  if (btnAdmin) btnAdmin.style.display = "none";
+}
+
+async function loadAdminPendingCount() {
+  if (!supabase || !syncState.isAdmin) return;
+  try {
+    const { data } = await supabase
+      .from("user_approvals")
+      .select("status")
+      .eq("status", "pending");
+    
+    const count = data ? data.length : 0;
+    const badge = document.getElementById("admin-badge");
+    if (badge) {
+      if (count > 0) {
+        badge.textContent = count;
+        badge.style.display = "flex";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao carregar contagem de pendentes:", err);
+  }
+}
+
+async function loadAdminPanel() {
+  if (!supabase || !syncState.isAdmin) return;
+  
+  try {
+    const { data: allUsers, error } = await supabase
+      .from("user_approvals")
+      .select("*")
+      .order("requested_at", { ascending: false });
+    
+    if (error) {
+      console.error("Erro ao carregar painel admin:", error);
+      return;
+    }
+    
+    const pending = allUsers.filter(u => u.status === "pending");
+    const approved = allUsers.filter(u => u.status === "approved");
+    const rejected = allUsers.filter(u => u.status === "rejected");
+    
+    // Atualizar contadores
+    const statPending = document.getElementById("admin-stat-pending");
+    if (statPending) statPending.textContent = pending.length;
+    const statApproved = document.getElementById("admin-stat-approved");
+    if (statApproved) statApproved.textContent = approved.length;
+    const statRejected = document.getElementById("admin-stat-rejected");
+    if (statRejected) statRejected.textContent = rejected.length;
+    
+    // Renderizar lista de pendentes
+    const pendingList = document.getElementById("admin-pending-list");
+    if (pendingList) {
+      if (pending.length === 0) {
+        pendingList.innerHTML = '<div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário pendente</div>';
+      } else {
+        pendingList.innerHTML = pending.map(u => `
+          <div class="admin-user-card" data-user-id="${u.user_id}">
+            <div class="admin-user-info">
+              <div class="admin-user-email">${u.email}</div>
+              <div class="admin-user-date">${new Date(u.requested_at).toLocaleDateString('pt-BR')} às ${new Date(u.requested_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</div>
+            </div>
+            <div class="admin-user-actions">
+              <button class="admin-btn-approve" onclick="adminApproveUser('${u.user_id}')">Aprovar</button>
+              <button class="admin-btn-reject" onclick="adminRejectUser('${u.user_id}')">Rejeitar</button>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+    
+    // Renderizar lista de aprovados
+    const approvedList = document.getElementById("admin-approved-list");
+    if (approvedList) {
+      if (approved.length === 0) {
+        approvedList.innerHTML = '<div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário aprovado</div>';
+      } else {
+        approvedList.innerHTML = approved.map(u => `
+          <div class="admin-user-card">
+            <div class="admin-user-info">
+              <div class="admin-user-email">${u.email}</div>
+              <div class="admin-user-date">Aprovado em ${u.approved_at ? new Date(u.approved_at).toLocaleDateString('pt-BR') : '---'}</div>
+            </div>
+            <div class="admin-user-actions">
+              <button class="admin-btn-reject" onclick="adminRejectUser('${u.user_id}')">Revogar</button>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
+    
+    // Atualizar badge
+    const badge = document.getElementById("admin-badge");
+    if (badge) {
+      if (pending.length > 0) {
+        badge.textContent = pending.length;
+        badge.style.display = "flex";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao carregar dados do painel admin:", err);
+  }
+}
+
+// Aprovar um usuário
+window.adminApproveUser = async function(userId) {
+  if (!supabase || !syncState.isAdmin) return;
+  try {
+    const { error } = await supabase
+      .from("user_approvals")
+      .update({ status: "approved", approved_at: new Date().toISOString() })
+      .eq("user_id", userId);
+    
+    if (error) throw error;
+    
+    if (typeof showToast === "function") showToast("Usuário aprovado com sucesso!", "success");
+    loadAdminPanel();
+  } catch (err) {
+    console.error("Erro ao aprovar usuário:", err);
+    if (typeof showToast === "function") showToast("Erro ao aprovar usuário.", "error");
+  }
+};
+
+// Rejeitar um usuário
+window.adminRejectUser = async function(userId) {
+  if (!supabase || !syncState.isAdmin) return;
+  try {
+    const { error } = await supabase
+      .from("user_approvals")
+      .update({ status: "rejected", approved_at: null })
+      .eq("user_id", userId);
+    
+    if (error) throw error;
+    
+    if (typeof showToast === "function") showToast("Usuário rejeitado.", "success");
+    loadAdminPanel();
+  } catch (err) {
+    console.error("Erro ao rejeitar usuário:", err);
+    if (typeof showToast === "function") showToast("Erro ao rejeitar usuário.", "error");
+  }
+};
