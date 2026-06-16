@@ -793,7 +793,7 @@ header {
   background-color: var(--bg-surface);
   border-left: 1px solid var(--border-color);
   box-shadow: -4px 0 24px var(--shadow-color);
-  z-index: 95;
+  z-index: 10001;
   display: flex;
   flex-direction: column;
   transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1262,7 +1262,7 @@ header {
   bottom: 0;
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(2px);
-  z-index: 92;
+  z-index: 10000;
   display: none;
 }
 
@@ -1281,7 +1281,7 @@ header {
   box-shadow: 0 8px 16px var(--shadow-color);
   padding: 12px 24px;
   border-radius: 8px;
-  z-index: 200;
+  z-index: 10003;
   opacity: 0;
   pointer-events: none;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
@@ -1690,7 +1690,7 @@ header {
   background-color: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 200;
+  z-index: 10002;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2918,7 +2918,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .pending-approval-screen {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: 10000;
   background: linear-gradient(145deg, #020617 0%, #0c1a3a 40%, #0a0f1e 70%, #030814 100%);
   display: flex;
   align-items: center;
