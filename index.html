@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="azul">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Leia e estude a Bíblia Online em um ambiente premium, livre de anúncios. Oferece marcação de versículos, anotações de estudo, busca inteligente e temas customizáveis.">
+  <title>Bíblia Online - Leitura e Estudo das Escrituras</title>
+  
+  <!-- Biblioteca CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  
+  <!-- Estilos Customizados (carregados por último para ter precedência) -->
+  <link rel="stylesheet" href="styles_v7.css">
+  
+  <!-- Chaves e Configurações do Supabase -->
+  <script src="config.js" defer></script>
+  
+  <!-- SDK de Conexão com o Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  
+  <!-- Inicialização do Cliente Supabase -->
+  <script src="supabase.js" defer></script>
+  
+  <!-- Flatpickr (Calendário Customizado) -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js" defer></script>
+  
+  <!-- Lógica de Autenticação e Sincronização Supabase -->
+  <script src="auth_v2.js" defer></script>
+  
+  <!-- Script de Dados Offline e Configurações (Carrega primeiro) -->
+  <script src="offline_data.js" defer></script>
+  
+  <!-- Sistema de Dropdowns Customizados (flat, minimalista) -->
+  <script src="custom-select_v3.js" defer></script>
+
+  <!-- Lógica Principal do Aplicativo -->
+  <script src="app.js" defer></script>
+
+
+</head>
+<body>
+
+  <!-- Cabeçalho Principal (Header) -->
+  <header>
+    <div class="logo-container">
+      <button id="btn-mobile-menu" class="btn-icon" style="display: none; margin-right: 8px;" aria-label="Abrir menu de livros">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+          <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+        </svg>
+      </button>
+      
+      <!-- Logotipo PNG da pasta imagens -->
+      <img src="./imagens/Logo.png" class="logo-img" alt="Logo Bíblia Online">
+      <span class="logo-text">Bíblia Online</span>
+      
+      <!-- Pills Rápidos de Leitura Atual (Visíveis no Desktop) -->
+      <div class="top-pills">
+        <div id="pill-book" class="pill active">Provérbios</div>
+        <div id="pill-chapter" class="pill">28</div>
+        <select id="translation-select"
+                class="pill-select auto-custom-select"
+                data-cs-class="cs-pill"
+                aria-label="Selecionar tradução">
+          <option value="acf">ACF - Corrigida e Fiel</option>
+          <option value="ara">ARA - Revista e Atualizada</option>
+          <option value="arc">ARC - Revista e Corrigida</option>
+          <option value="as21">AS21 - Almeida Século 21</option>
+          <option value="jfaa">JFAA - Ferreira de Almeida</option>
+          <option value="kja">KJA - King James Atualizada</option>
+          <option value="kjf">KJF - King James Fiel</option>
+          <option value="naa">NAA - Nova Almeida Atualizada</option>
+          <option value="nbv">NBV - Nova Bíblia Viva</option>
+          <option value="ntlh">NTLH - Linguagem de Hoje</option>
+          <option value="nvi">NVI - Nova Versão Internacional</option>
+          <option value="nvt">NVT - Nova Versão Transformadora</option>
+          <option value="tb">TB - Tradução Brasileira</option>
+        </select>
+
+      </div>
+    </div>
+
+    <!-- Ações e Menus de Configurações -->
+    <div class="top-actions">
+
+      <!-- Botão Modo Comparação -->
+      <button id="btn-compare" class="btn-icon" title="Comparar traduções lado a lado" aria-label="Comparar traduções">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14H5V5h6v12zm8 0h-6V5h6v12z"/>
+        </svg>
+      </button>
+
+      <!-- Botão de Busca -->
+      <button id="btn-search" class="btn-icon" title="Buscar termo na Bíblia" aria-label="Buscar termo">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+      </button>
+      
+      <!-- Botão de Destaques/Notas -->
+      <button id="btn-favorites" class="btn-icon" title="Minhas anotações e favoritos" aria-label="Anotações e Favoritos">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      </button>
+      
+      <!-- Botão de Plano de Leitura -->
+      <button id="btn-reading-plan" class="btn-icon" title="Plano de Leitura Diária" aria-label="Plano de Leitura">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v2h-5zm-4 0h2v2H8zm4 4h5v2h-5zm-4 0h2v2H8z"/>
+        </svg>
+      </button>
+      
+      <!-- Botão de Autenticação e Menu de Usuário (Supabase) -->
+      <div id="auth-header-container" class="auth-header-container">
+        <button id="btn-auth" class="btn-icon" title="Entrar / Criar Conta" aria-label="Autenticação">
+          <svg id="user-avatar-svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+          </svg>
+          <img id="user-avatar-img" class="user-avatar-img-header" src="" alt="Avatar" style="display: none; width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+          <span id="sync-indicator" class="sync-indicator sync-offline" title="Modo local/desconectado"></span>
+        </button>
+        
+        <!-- Menu Flutuante do Usuário Logado -->
+        <div id="user-dropdown" class="user-dropdown" style="display: none;">
+          <div class="user-dropdown-header">
+            <div class="avatar-upload-container">
+              <img id="dropdown-avatar-img" class="dropdown-avatar-img" src="" alt="Avatar" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover;">
+              <label for="avatar-file-input" class="avatar-upload-label" title="Alterar foto de perfil">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              </label>
+              <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
+            </div>
+            <div class="user-dropdown-info">
+              <div id="user-email" class="user-email">email@exemplo.com</div>
+              <div id="user-sync-status" class="user-sync-status">Sincronizado</div>
+            </div>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <button id="btn-open-profile" class="dropdown-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>Meu Perfil</span>
+          </button>
+          <button id="btn-sync-now" class="dropdown-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2v6h-6"></path>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+              <path d="M3 22v-6h6"></path>
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+            </svg>
+            <span>Sincronizar Agora</span>
+          </button>
+          <button id="btn-logout" class="dropdown-item logout-item">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span>Sair da Conta</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Botão de Configurações de Leitura -->
+      <button id="btn-settings" class="btn-icon" title="Ajustes visuais" aria-label="Ajustes de leitura">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Container Principal -->
+  <main class="main-container">
+    
+    <!-- Painel de Leitura (Esquerda/Centro) -->
+    <section id="reader-pane" class="reader-pane size-md font-serif">
+      <!-- Cabeçalho Fixo do Leitor (Visível no topo ao rolar, ocupa largura total) -->
+      <div class="reader-header-sticky">
+        <div class="reader-header-sticky-content">
+          <!-- Breadcrumbs dinâmicos -->
+          <nav class="breadcrumb" aria-label="Localização da leitura">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Livros</span>
+            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+            <span id="bc-book">Provérbios</span>
+            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+            <strong id="bc-chapter" style="color: var(--text-primary);">Capítulo 28</strong>
+          </nav>
+
+          <h1 id="chapter-title" class="chapter-title">
+             <span>Provérbios 28</span>
+          </h1>
+          <div style="display: flex; justify-content: flex-end; width: 100%; margin-bottom: 8px;">
+            <button id="btn-mark-book-read" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span class="btn-text">Marcar Capítulo como Lido</span>
+            </button>
+            <button id="btn-mark-entire-book-read" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; display: flex; align-items: center; gap: 6px; margin-left: 8px;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+              <span class="btn-text">Marcar Livro como Lido</span>
+            </button>
+          </div>
+          
+          <div id="comparison-header-container"></div>
+        </div>
+      </div>
+
+      <div class="reader-container">
+
+        <!-- ✨ VERSÍCULO DO DIA -->
+        <div id="verse-of-day-container" class="vod-container" style="display:none;" aria-label="Versículo do Dia">
+          <div class="vod-card">
+            <button id="vod-dismiss-btn" class="vod-dismiss-btn" aria-label="Fechar versículo do dia">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+            <div class="vod-header">
+              <div class="vod-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+              </div>
+              <div class="vod-meta">
+                <span class="vod-label">✨ Versículo do Dia</span>
+                <span class="vod-date" id="vod-date"></span>
+              </div>
+            </div>
+            <blockquote class="vod-text" id="vod-text"></blockquote>
+            <cite class="vod-reference" id="vod-reference"></cite>
+            <div class="vod-actions">
+              <button id="vod-navigate-btn" class="vod-btn-primary" aria-label="Ir para o contexto deste versículo">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg>
+                Ler Contexto
+              </button>
+              <button id="vod-share-btn" class="vod-btn-secondary" aria-label="Compartilhar versículo do dia">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+                Compartilhar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Artigo do Capítulo -->
+        <article>
+          <!-- Versículos serão inseridos aqui dinamicamente -->
+          <div id="verses-container" class="verses-container"></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Painel Lateral (Direita - Desktop / Menu Hambúrguer - Mobile) -->
+    <aside class="sidebar-pane">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Livros & Capítulos</h2>
+        <div class="search-book-container">
+          <svg class="search-book-icon" viewBox="0 0 24 24">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          <input type="text" id="search-book-input" class="search-book-input" placeholder="Buscar livro...">
+        </div>
+      </div>
+
+      <!-- Lista de Livros (VT/NT) -->
+      <div id="books-list" class="books-list"></div>
+
+      <!-- Grade de Capítulos do Livro Ativo -->
+      <div class="chapters-sidebar">
+        <div id="chapters-grid-title" class="chapters-grid-title">Capítulos de Provérbios</div>
+        <div id="chapters-grid" class="chapters-grid"></div>
+      </div>
+
+
+    </aside>
+
+    <!-- Barra de Navegação Inferior para Navegação Rápida de Capítulos -->
+    <footer class="bottom-nav-bar">
+      <button id="btn-prev-chapter" class="nav-btn" aria-label="Capítulo anterior">
+        <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        <span class="nav-btn-text">Anterior</span>
+      </button>
+      
+      <button id="btn-next-chapter" class="nav-btn" aria-label="Capítulo seguinte">
+        <span class="nav-btn-text">Provérbios 29</span>
+        <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+      </button>
+    </footer>
+
+  </main>
+
+  <!-- GAVETA (DRAWER) DE BUSCA -->
+  <div id="search-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Pesquisa Bíblica</h3>
+      <button class="btn-icon drawer-close" aria-label="Fechar busca">✕</button>
+    </div>
+    <div class="drawer-body">
+      <form id="search-form" class="search-form">
+        <input type="text" id="search-input" class="search-input" placeholder="Termo para buscar (ex: amor, fé, justo)..." required>
+        <button type="submit" class="btn-primary">Buscar</button>
+      </form>
+      <div id="search-results-container">
+        <div style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px;">
+          Pesquise por palavras ou termos completos na versão ativa.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAVETA (DRAWER) DE FAVORITOS & NOTAS -->
+  <div id="favorites-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Marcados & Notas</h3>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="btn-export-notes" class="btn-icon" title="Exportar destaques e notas (Markdown)" style="width: 32px; height: 32px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/>
+          </svg>
+        </button>
+        <button class="btn-icon drawer-close" aria-label="Fechar anotações" style="width: 32px; height: 32px;">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <!-- Filtro de Busca nos Marcados & Notas -->
+      <div class="search-notes-container" style="margin-bottom: 16px; position: relative;">
+        <input type="text" id="search-notes-input" class="search-input" placeholder="Filtrar notas ou referências..." style="width: 100%; box-sizing: border-box; padding-left: 36px;">
+        <svg class="search-book-icon" viewBox="0 0 24 24" style="left: 12px; position: absolute; top: 50%; transform: translateY(-50%); fill: var(--text-muted); width: 14px; height: 14px; pointer-events: none;">
+          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+      </div>
+      <div id="annotations-container" class="annotations-list">
+        <!-- Lista de versículos marcados -->
+      </div>
+    </div>
+  </div>
+
+  <!-- GAVETA (DRAWER) DE PLANO DE LEITURA -->
+  <div id="reading-plan-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Plano de Leitura Diária</h3>
+      <button class="btn-icon drawer-close" aria-label="Fechar plano de leitura">✕</button>
+    </div>
+    <div class="drawer-body">
+      <div class="reading-plan-selector-container" style="margin-bottom: 20px;">
+        <label for="plan-select" style="display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">Selecione um Plano de Leitura:</label>
+        <select id="plan-select"
+                class="translation-select auto-custom-select"
+                data-cs-class="cs-full"
+                style="width: 100%; max-width: 100%; box-sizing: border-box;">
+          <option value="">-- Escolha um Plano --</option>
+          <option value="gospels">Evangelhos em 30 Dias</option>
+          <option value="proverbs">Sabedoria (Provérbios em 31 Dias)</option>
+        </select>
+
+      </div>
+
+      <!-- Seção de Progresso do Plano Ativo -->
+      <div id="active-plan-container" style="display: none;">
+        <div class="progress-section" style="background-color: var(--bg-surface-hover); padding: 16px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700; margin-bottom: 8px;">
+            <span id="active-plan-title" style="color: var(--accent-color);">Evangelhos em 30 Dias</span>
+            <span id="active-plan-percentage">0%</span>
+          </div>
+          <div id="active-plan-description" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;"></div>
+          <div class="progress-bar-bg" style="width: 100%; height: 8px; background-color: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+            <div id="active-plan-progress" style="width: 0%; height: 100%; background-color: var(--accent-color); transition: width 0.3s ease;"></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: right;" id="active-plan-stats">
+            0 de 30 dias concluídos
+          </div>
+        </div>
+
+        <div style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px;">Cronograma de Leituras</div>
+        <div id="reading-days-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
+          <!-- Dias do plano serão injetados dinamicamente -->
+        </div>
+      </div>
+
+      <!-- Mensagem de boas vindas / nenhum plano selecionado -->
+      <div id="no-plan-selected-message" style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px;">
+        Selecione um plano de leitura diária para acompanhar seu progresso espiritual localmente.
+      </div>
+    </div>
+  </div>
+
+  <!-- GAVETA (DRAWER) DE PERFIL DO USUÁRIO -->
+  <div id="profile-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Meu Perfil</h3>
+      <button class="btn-icon drawer-close" aria-label="Fechar perfil">✕</button>
+    </div>
+    <div class="drawer-body">
+      <!-- Foto de Perfil Centralizada -->
+      <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+        <div class="avatar-upload-container" style="width: 80px; height: 80px;">
+          <img id="profile-avatar-img" src="" alt="Avatar" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
+          <label for="profile-avatar-file-input" class="avatar-upload-label" style="width: 24px; height: 24px; bottom: 0; right: 0;" title="Alterar foto de perfil">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          </label>
+          <input type="file" id="profile-avatar-file-input" accept="image/*" style="display: none;">
+        </div>
+        <span id="profile-member-since" style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">Membro desde: --/--/----</span>
+      </div>
+
+      <!-- Informações Básicas -->
+      <form id="profile-form" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 28px;">
+        <div class="auth-input-group">
+          <label for="profile-email-readonly">E-mail (Não editável)</label>
+          <input type="email" id="profile-email-readonly" class="auth-input" readonly style="opacity: 0.6; cursor: not-allowed;">
+        </div>
+        <div class="auth-input-group">
+          <label for="profile-fullname">Nome Completo</label>
+          <input type="text" id="profile-fullname" class="auth-input" placeholder="Seu nome completo">
+        </div>
+        <div class="auth-input-group">
+          <label for="profile-socialname">Nome Social / Apelido</label>
+          <input type="text" id="profile-socialname" class="auth-input" placeholder="Como gostaria de ser chamado">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div class="auth-input-group">
+            <label for="profile-birthdate">Nascimento</label>
+            <input type="text" id="profile-birthdate" class="auth-input" placeholder="Selecione a data..." style="height: 38px;">
+          </div>
+          <div class="auth-input-group">
+            <label for="profile-maritalstatus">Estado Civil</label>
+            <select id="profile-maritalstatus"
+                    class="auth-input auto-custom-select"
+                    data-cs-class="cs-auth cs-full"
+                    style="height: 38px;">
+              <option value="">Selecione...</option>
+              <option value="solteiro">Solteiro(a)</option>
+              <option value="casado">Casado(a)</option>
+              <option value="divorciado">Divorciado(a)</option>
+              <option value="viuvo">Viúvo(a)</option>
+              <option value="outro">Outro</option>
+            </select>
+
+          </div>
+        </div>
+
+        <div class="auth-input-group">
+          <label for="profile-gender">Sexo</label>
+          <select id="profile-gender"
+                  class="auth-input auto-custom-select"
+                  data-cs-class="cs-auth cs-full"
+                  style="height: 38px;">
+            <option value="">Selecione...</option>
+            <option value="masculino">Masculino</option>
+            <option value="feminino">Feminino</option>
+            <option value="prefiro_nao_dizer">Prefiro não informar</option>
+          </select>
+
+        </div>
+
+        <div class="auth-input-group">
+          <label for="profile-bio">Sobre Mim / Biografia</label>
+          <textarea id="profile-bio" class="note-textarea" style="height: 80px;" placeholder="Conte um pouco sobre seus estudos ou jornada de fé..."></textarea>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; padding: 10px; height: 38px;">Salvar Alterações</button>
+      </form>
+
+      <!-- Alteração de Senha -->
+      <div style="border-top: 1px solid var(--border-color); padding-top: 20px; margin-bottom: 28px;">
+        <div class="settings-label" style="font-weight: 700; margin-bottom: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Alterar Senha
+        </div>
+        <form id="change-password-form" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="auth-input-group">
+            <label for="profile-current-password">Senha Atual</label>
+            <input type="password" id="profile-current-password" class="auth-input" placeholder="Sua senha atual" required autocomplete="current-password">
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="auth-input-group">
+              <label for="profile-new-password">Nova Senha</label>
+              <input type="password" id="profile-new-password" class="auth-input" placeholder="Mín. 6 chars" minlength="6" required autocomplete="new-password">
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-confirm-password">Confirmar</label>
+              <input type="password" id="profile-confirm-password" class="auth-input" placeholder="Repita a senha" minlength="6" required autocomplete="new-password">
+            </div>
+          </div>
+          
+          <button type="submit" class="btn-secondary" style="width: 100%; padding: 10px; height: 38px;">Alterar Senha</button>
+        </form>
+      </div>
+
+
+
+      <!-- Estatísticas do Usuário -->
+      <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
+        <div class="settings-label" style="display: flex; align-items: center; gap: 8px;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          Minhas Estatísticas
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+          <div style="background-color: var(--bg-surface-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+            <div id="stat-highlights" style="font-size: 20px; font-weight: 700; color: var(--accent-color);">0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">Destaques</div>
+          </div>
+          <div style="background-color: var(--bg-surface-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+            <div id="stat-notes" style="font-size: 20px; font-weight: 700; color: var(--accent-color);">0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">Notas de Estudo</div>
+          </div>
+          <div style="background-color: var(--bg-surface-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+            <div id="stat-favorites" style="font-size: 20px; font-weight: 700; color: var(--accent-color);">0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">Favoritos</div>
+          </div>
+          <div style="background-color: var(--bg-surface-hover); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+            <div id="stat-history" style="font-size: 20px; font-weight: 700; color: var(--accent-color);">0</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 600;">Capítulos Lidos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAVETA (DRAWER) DE CONFIGURAÇÕES VISUAIS -->
+  <div id="settings-drawer" class="drawer">
+    <div class="drawer-header">
+      <h3 class="drawer-title">Configurações de Leitura</h3>
+      <button class="btn-icon drawer-close" aria-label="Fechar configurações">✕</button>
+    </div>
+    <div class="drawer-body">
+      
+      <!-- Escolha de Tema -->
+      <div class="settings-group">
+        <div class="settings-label">Tema Visual</div>
+        <div class="theme-options">
+          <button class="theme-btn active" data-theme-opt="azul">Azul Celeste</button>
+          <button class="theme-btn" data-theme-opt="claro">Executivo Claro</button>
+          <button class="theme-btn" data-theme-opt="sepia">Sépia Vintage</button>
+          <button class="theme-btn" data-theme-opt="noturno">Amoled Black</button>
+        </div>
+      </div>
+
+      <!-- Fonte de Leitura -->
+      <div class="settings-group">
+        <div class="settings-label">Fonte de Leitura</div>
+        <div class="font-options">
+          <button class="font-btn active" data-font="serif">Clássica (Serif)</button>
+          <button class="font-btn" data-font="sans">Moderna (Sans)</button>
+        </div>
+      </div>
+
+      <!-- Tamanho de Fonte -->
+      <div class="settings-group">
+        <div class="settings-label">Tamanho do Texto</div>
+        <div class="size-options">
+          <button class="size-btn" data-size-opt="sm">A-</button>
+          <button class="size-btn active" data-size-opt="md">Padrão</button>
+          <button class="size-btn" data-size-opt="lg">A+</button>
+          <button class="size-btn" data-size-opt="xl">A++</button>
+        </div>
+      </div>
+
+      <!-- Informações do Modo Local -->
+      <div class="settings-group" style="border-top: 1px solid var(--border-color); padding-top: 20px;">
+        <div class="settings-label">Modo Local &amp; Offline ⚡</div>
+        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0 0;">
+          O site está configurado no modo offline. As 13 traduções estão salvas localmente no projeto. A leitura e a busca funcionam instantaneamente, sem consumir dados de internet e sem limites de acesso!
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MENU FLUTUANTE DE CONTEXTO DO VERSÍCULO (POPUP) -->
+  <div id="verse-menu" class="verse-menu" role="menu">
+    <!-- Destaque por cores -->
+    <div class="color-dots">
+      <div class="color-dot dot-clear" data-color-class="" title="Sem Destaque"></div>
+      <div class="color-dot dot-yellow" data-color-class="hl-yellow" title="Amarelo"></div>
+      <div class="color-dot dot-green" data-color-class="hl-green" title="Verde"></div>
+      <div class="color-dot dot-pink" data-color-class="hl-pink" title="Rosa"></div>
+      <div class="color-dot dot-blue" data-color-class="hl-blue" title="Azul"></div>
+      <div class="color-dot dot-orange" data-color-class="hl-orange" title="Laranja"></div>
+    </div>
+    
+    <!-- Botões de Ação -->
+    <button id="menu-btn-read" class="menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      <span>Marcar como Lido</span>
+    </button>
+    
+    <button id="menu-btn-favorite" class="menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      <span>Favoritar</span>
+    </button>
+    
+    <button id="menu-btn-note" class="menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      <span>Anotar</span>
+    </button>
+    
+    <button id="menu-btn-copy" class="menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+      <span>Copiar Versículo</span>
+    </button>
+    
+    <button id="menu-btn-share" class="menu-item" role="menuitem">
+      <svg viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+      <span>Compartilhar</span>
+    </button>
+  </div>
+
+  <!-- MODAL DE AUTENTICAÇÃO (LOGIN / CADASTRO) -->
+  <div id="auth-modal" class="auth-modal" style="display: none;">
+    <div class="auth-modal-content">
+      <button class="auth-modal-close" id="btn-close-auth-modal">✕</button>
+      
+      <!-- Seção de Login -->
+      <div id="auth-section-login" class="auth-section">
+        <h3 class="auth-title">Acesse sua Conta</h3>
+        <p class="auth-subtitle">Sincronize suas marcações, notas e progresso de leitura em tempo real.</p>
+        
+        <form id="login-form" class="auth-form">
+          <div class="auth-input-group">
+            <label for="login-email">E-mail</label>
+            <input type="email" id="login-email" class="auth-input" placeholder="exemplo@email.com" required autocomplete="username">
+          </div>
+          <div class="auth-input-group">
+            <label for="login-password">Senha</label>
+            <input type="password" id="login-password" class="auth-input" placeholder="Sua senha" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn-primary auth-submit-btn">Entrar</button>
+        </form>
+        
+        <div class="auth-divider"><span>ou</span></div>
+        
+        <button id="btn-google-login" class="btn-secondary google-btn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="margin-right: 8px; vertical-align: middle;">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Entrar com o Google
+        </button>
+        
+        <div class="auth-switch-prompt">
+          Não tem uma conta? <a href="#" id="link-to-register">Cadastre-se</a>
+        </div>
+      </div>
+      
+      <!-- Seção de Cadastro -->
+      <div id="auth-section-register" class="auth-section" style="display: none;">
+        <h3 class="auth-title">Criar Nova Conta</h3>
+        <p class="auth-subtitle">Comece a salvar seus estudos bíblicos na nuvem gratuitamente.</p>
+        
+        <form id="register-form" class="auth-form">
+          <div class="auth-input-group">
+            <label for="register-email">E-mail</label>
+            <input type="email" id="register-email" class="auth-input" placeholder="exemplo@email.com" required autocomplete="username">
+          </div>
+          <div class="auth-input-group">
+            <label for="register-password">Senha (mínimo 6 caracteres)</label>
+            <input type="password" id="register-password" class="auth-input" placeholder="Crie uma senha forte" minlength="6" required autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn-primary auth-submit-btn">Criar Conta</button>
+        </form>
+        
+        <div class="auth-switch-prompt">
+          Já possui uma conta? <a href="#" id="link-to-login">Entrar</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay para desfoque de fundo quando gaveta ou modal estiver aberto -->
+  <div id="overlay" class="overlay"></div>
+
+  <!-- Toast Container para avisos do sistema -->
+  <div id="toast" class="toast" role="alert" aria-live="polite"></div>
+
+</body>
+</html>
