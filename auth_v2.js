@@ -26,6 +26,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Ouve requisições de reset de senha na URL
 function handlePasswordReset() {
+  // O Supabase coloca os parâmetros no hash (#) ou na query (?)
+  const paramsString = window.location.hash.includes("error=") 
+    ? window.location.hash.substring(1) 
+    : window.location.search.substring(1);
+    
+  const urlParams = new URLSearchParams(paramsString);
+  const errorDesc = urlParams.get("error_description");
+  
+  if (errorDesc) {
+    // Se o Supabase retornar um erro na URL (ex: link expirado ou já usado)
+    const friendlyError = errorDesc.includes("expired") 
+      ? "O link é inválido, expirou ou já foi utilizado. Solicite um novo." 
+      : decodeURIComponent(errorDesc.replace(/\+/g, " "));
+    showToast(friendlyError, "error");
+    
+    // Limpa a URL
+    window.history.replaceState(null, document.title, window.location.pathname);
+    return;
+  }
+
   if (window.location.hash && window.location.hash.includes("type=recovery")) {
     showToast("Defina sua nova senha.", "success");
     const authModal = document.getElementById("auth-modal");
