@@ -27,11 +27,21 @@ document.addEventListener("DOMContentLoaded", () => {
 // Ouve requisições de reset de senha na URL
 function handlePasswordReset() {
   if (window.location.hash && window.location.hash.includes("type=recovery")) {
-    showToast("Por favor, conecte-se para redefinir sua senha.", "success");
+    showToast("Defina sua nova senha.", "success");
     const authModal = document.getElementById("auth-modal");
     if (authModal) {
       authModal.style.display = "flex";
       document.getElementById("overlay").classList.add("active");
+      
+      const loginSection = document.getElementById("auth-section-login");
+      const registerSection = document.getElementById("auth-section-register");
+      const forgotSection = document.getElementById("auth-section-forgot-password");
+      const updatePasswordSection = document.getElementById("auth-section-update-password");
+      
+      if (loginSection) loginSection.style.display = "none";
+      if (registerSection) registerSection.style.display = "none";
+      if (forgotSection) forgotSection.style.display = "none";
+      if (updatePasswordSection) updatePasswordSection.style.display = "block";
     }
   }
 }
@@ -154,6 +164,13 @@ function initAuthUI() {
   const linkToLogin = document.getElementById("link-to-login");
   const loginSection = document.getElementById("auth-section-login");
   const registerSection = document.getElementById("auth-section-register");
+  
+  const forgotSection = document.getElementById("auth-section-forgot-password");
+  const updatePasswordSection = document.getElementById("auth-section-update-password");
+  const linkForgotPassword = document.getElementById("link-forgot-password");
+  const linkBackToLogin = document.getElementById("link-back-to-login");
+  const forgotForm = document.getElementById("forgot-password-form");
+  const updatePasswordForm = document.getElementById("update-password-form");
 
   const loginForm = document.getElementById("login-form");
   const registerForm = document.getElementById("register-form");
@@ -196,6 +213,8 @@ function initAuthUI() {
     overlay.classList.add("active");
     if (loginSection) loginSection.style.display = "block";
     if (registerSection) registerSection.style.display = "none";
+    if (forgotSection) forgotSection.style.display = "none";
+    if (updatePasswordSection) updatePasswordSection.style.display = "none";
   }
 
   // Fechar Modal
@@ -224,6 +243,81 @@ function initAuthUI() {
       e.preventDefault();
       registerSection.style.display = "none";
       loginSection.style.display = "block";
+    });
+  }
+
+  if (linkForgotPassword) {
+    linkForgotPassword.addEventListener("click", (e) => {
+      e.preventDefault();
+      loginSection.style.display = "none";
+      if (forgotSection) forgotSection.style.display = "block";
+    });
+  }
+
+  if (linkBackToLogin) {
+    linkBackToLogin.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (forgotSection) forgotSection.style.display = "none";
+      loginSection.style.display = "block";
+    });
+  }
+
+  // Submissão do formulário de Esqueci a Senha
+  if (forgotForm) {
+    forgotForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("forgot-email").value.trim();
+      try {
+        updateSyncIndicator("working");
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + window.location.pathname
+        });
+        if (error) throw error;
+        showToast("Link de recuperação enviado para seu e-mail!", "success");
+        if (forgotSection) forgotSection.style.display = "none";
+        if (loginSection) loginSection.style.display = "block";
+      } catch (error) {
+        console.error("Erro ao solicitar recuperação:", error);
+        showToast(error.message || "Erro ao solicitar recuperação.", "error");
+      } finally {
+        updateSyncIndicator(syncState.isLoggedIn ? "online" : "offline");
+      }
+    });
+  }
+
+  // Submissão do formulário de Nova Senha (pós-recuperação)
+  if (updatePasswordForm) {
+    updatePasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const newPassword = document.getElementById("update-new-password").value;
+      const confirmPassword = document.getElementById("update-confirm-password").value;
+
+      if (newPassword !== confirmPassword) {
+        showToast("As senhas não coincidem.", "error");
+        return;
+      }
+
+      if (newPassword.length < 6) {
+        showToast("A senha deve ter pelo menos 6 caracteres.", "error");
+        return;
+      }
+
+      try {
+        updateSyncIndicator("working");
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        
+        showToast("Senha redefinida com sucesso!", "success");
+        closeAuthModal();
+        
+        // Remove hash from URL
+        window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+      } catch (error) {
+        console.error("Erro ao redefinir senha:", error);
+        showToast(error.message || "Erro ao redefinir senha.", "error");
+      } finally {
+        updateSyncIndicator(syncState.isLoggedIn ? "online" : "offline");
+      }
     });
   }
 

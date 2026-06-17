@@ -701,7 +701,10 @@
             <input type="email" id="login-email" class="auth-input" placeholder="exemplo@email.com" required autocomplete="username">
           </div>
           <div class="auth-input-group">
-            <label for="login-password">Senha</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label for="login-password" style="margin-bottom: 0;">Senha</label>
+              <a href="#" id="link-forgot-password" style="font-size: 12px; color: var(--accent-color); text-decoration: none;">Esqueceu a senha?</a>
+            </div>
             <input type="password" id="login-password" class="auth-input" placeholder="Sua senha" required autocomplete="current-password">
           </div>
           <button type="submit" class="btn-primary auth-submit-btn">Entrar</button>
@@ -744,6 +747,42 @@
         <div class="auth-switch-prompt">
           Já possui uma conta? <a href="#" id="link-to-login">Entrar</a>
         </div>
+      </div>
+      
+      <!-- Seção de Recuperar Senha -->
+      <div id="auth-section-forgot-password" class="auth-section" style="display: none;">
+        <h3 class="auth-title">Recuperar Senha</h3>
+        <p class="auth-subtitle">Informe seu e-mail para receber um link de redefinição.</p>
+        
+        <form id="forgot-password-form" class="auth-form">
+          <div class="auth-input-group">
+            <label for="forgot-email">E-mail</label>
+            <input type="email" id="forgot-email" class="auth-input" placeholder="exemplo@email.com" required>
+          </div>
+          <button type="submit" class="btn-primary auth-submit-btn">Enviar Link</button>
+        </form>
+        
+        <div class="auth-switch-prompt">
+          Lembrou a senha? <a href="#" id="link-back-to-login">Voltar ao Login</a>
+        </div>
+      </div>
+
+      <!-- Seção de Definir Nova Senha (após clicar no link) -->
+      <div id="auth-section-update-password" class="auth-section" style="display: none;">
+        <h3 class="auth-title">Definir Nova Senha</h3>
+        <p class="auth-subtitle">Crie uma nova senha para sua conta.</p>
+        
+        <form id="update-password-form" class="auth-form">
+          <div class="auth-input-group">
+            <label for="update-new-password">Nova Senha</label>
+            <input type="password" id="update-new-password" class="auth-input" placeholder="Mín. 6 chars" minlength="6" required autocomplete="new-password">
+          </div>
+          <div class="auth-input-group">
+            <label for="update-confirm-password">Confirmar Nova Senha</label>
+            <input type="password" id="update-confirm-password" class="auth-input" placeholder="Repita a senha" minlength="6" required autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn-primary auth-submit-btn">Salvar Nova Senha</button>
+        </form>
       </div>
     </div>
   </div>
