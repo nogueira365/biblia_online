@@ -603,6 +603,8 @@ function initAuthUI() {
       state.maritalStatus = profileMaritalStatusVal;
       state.gender = profileGenderVal;
       
+      if (typeof updateGreeting === "function") updateGreeting();
+      
       if (typeof saveStateToLocalStorage === "function") {
         saveStateToLocalStorage();
       }
@@ -776,8 +778,12 @@ function listenToAuthChanges() {
       syncState.isAdmin = (session.user.email === ADMIN_EMAIL);
       
       // Atualizar UI do cabeçalho
-      const userEmailEl = document.getElementById("user-email");
-      if (userEmailEl) userEmailEl.textContent = session.user.email;
+      if (typeof updateGreeting === "function") {
+        updateGreeting();
+      } else {
+        const userEmailEl = document.getElementById("user-email");
+        if (userEmailEl) userEmailEl.textContent = session.user.email;
+      }
       
       const btnAuth = document.getElementById("btn-auth");
       if (btnAuth) btnAuth.title = `Conectado como ${session.user.email}`;
@@ -1126,6 +1132,8 @@ async function pullDataFromCloud(userId) {
     state.birthDate = pref.birth_date || "";
     state.maritalStatus = pref.marital_status || "";
     state.gender = pref.gender || "";
+    
+    if (typeof updateGreeting === "function") updateGreeting();
     
     // Atualiza a exibição da foto de perfil
     updateAvatarUI(state.avatarUrl);
@@ -1636,4 +1644,41 @@ window.adminRejectUser = async function(userId) {
     console.error("Erro ao rejeitar usuário:", err);
     if (typeof showToast === "function") showToast("Erro ao rejeitar usuário.", "error");
   }
+};
+
+// Atualiza a saudação do usuário no cabeçalho
+window.updateGreeting = function() {
+  const greetingEl = document.getElementById("user-email");
+  if (!greetingEl) return;
+  
+  let displayName = "";
+  if (typeof state !== "undefined") {
+    displayName = state.socialName || state.fullName;
+  }
+  
+  if (!displayName && syncState && syncState.currentUser) {
+    const emailParts = syncState.currentUser.email.split('@');
+    if (emailParts.length > 0) displayName = emailParts[0];
+  }
+  
+  if (!displayName) {
+    if (syncState && syncState.currentUser) {
+      greetingEl.textContent = syncState.currentUser.email;
+    }
+    return;
+  }
+  
+  const hour = new Date().getHours();
+  let greeting = "Boa noite";
+  if (hour >= 5 && hour < 12) greeting = "Bom dia";
+  else if (hour >= 12 && hour < 18) greeting = "Boa tarde";
+  
+  greetingEl.innerHTML = `
+    <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">
+      ${greeting}, ${displayName}!
+    </div>
+    <div style="font-size: 11px; font-weight: 400; color: var(--text-muted); line-height: 1.2; word-break: normal; white-space: normal;">
+      Que a paz do Senhor Jesus Cristo esteja com você!
+    </div>
+  `;
 };

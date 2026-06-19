@@ -912,7 +912,7 @@ async function loadActiveChapter() {
       <div style="display: flex; align-items: center; gap: 12px;">
         <span>${bookData.name} ${state.currentChapter}</span>
         <span style="font-size: 14px; font-weight: 500; color: var(--text-muted); background-color: var(--bg-surface-hover); padding: 4px 10px; border-radius: 4px;">
-          ${versionLabel} Local
+          ${versionLabel}
         </span>
       </div>
       <button id="btn-vod-show" class="btn-icon" title="Versículo do Dia" aria-label="Versículo do Dia">
