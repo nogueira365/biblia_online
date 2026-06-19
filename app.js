@@ -1158,6 +1158,12 @@ function updateBottomNavigationUI() {
   const bookData = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
   const bookIndex = BIBLE_BOOKS.findIndex(b => b.abbrev === state.currentBook);
 
+  const formatAbbrev = (abbr) => {
+    if (abbr === 'job') return 'Jó';
+    if (/^\d/.test(abbr)) return abbr[0] + ' ' + abbr[1].toUpperCase() + abbr.slice(2);
+    return abbr.charAt(0).toUpperCase() + abbr.slice(1);
+  };
+
   // Anterior
   if (state.currentChapter === 1 && bookIndex === 0) {
     // Primeiro livro, primeiro capítulo: desabilitar anterior
@@ -1166,10 +1172,10 @@ function updateBottomNavigationUI() {
   } else {
     prevBtn.classList.remove("disabled");
     if (state.currentChapter > 1) {
-      prevBtn.querySelector(".nav-btn-text").textContent = `${bookData.name} ${state.currentChapter - 1}`;
+      prevBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter - 1}`;
     } else {
       const prevBook = BIBLE_BOOKS[bookIndex - 1];
-      prevBtn.querySelector(".nav-btn-text").textContent = `${prevBook.name} ${prevBook.chapters}`;
+      prevBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(prevBook.abbrev)} ${prevBook.chapters}`;
     }
   }
 
@@ -1181,10 +1187,10 @@ function updateBottomNavigationUI() {
   } else {
     nextBtn.classList.remove("disabled");
     if (state.currentChapter < bookData.chapters) {
-      nextBtn.querySelector(".nav-btn-text").textContent = `${bookData.name} ${state.currentChapter + 1}`;
+      nextBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter + 1}`;
     } else {
       const nextBook = BIBLE_BOOKS[bookIndex + 1];
-      nextBtn.querySelector(".nav-btn-text").textContent = `${nextBook.name} 1`;
+      nextBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(nextBook.abbrev)} 1`;
     }
   }
 }
