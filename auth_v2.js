@@ -1009,6 +1009,32 @@ async function uploadLocalDataToCloud(userId) {
   }, { onConflict: "user_id" });
 }
 
+// Salva apenas as preferências e dados do perfil na nuvem
+async function cloudSavePreferences() {
+  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
+  const userId = syncState.currentUser.id;
+  
+  const { error } = await supabase.from("user_preferences").upsert({
+    user_id: userId,
+    theme: state.theme,
+    font_family: state.fontFamily,
+    font_size: state.fontSize,
+    current_translation: state.currentTranslation,
+    avatar_url: state.avatarUrl || null,
+    full_name: state.fullName || null,
+    bio: state.bio || null,
+    social_name: state.socialName || null,
+    birth_date: state.birthDate || null,
+    marital_status: state.maritalStatus || null,
+    gender: state.gender || null
+  }, { onConflict: "user_id" });
+  
+  if (error) {
+    console.error("Erro no Upsert de preferências:", error);
+    throw error;
+  }
+}
+
 // Puxa os dados da nuvem para preencher o estado local da aplicação
 async function pullDataFromCloud(userId) {
   // 1. Buscar Marcações (Highlights)
@@ -1099,9 +1125,7 @@ async function pullDataFromCloud(userId) {
   }
 
   if (pref) {
-    // Alerta de debug para ver o que veio da nuvem ao carregar a página
-    // Remover depois!
-    alert("Ao carregar a página, Supabase retornou o Nome: " + pref.full_name);
+    // Alerta de debug removido
 
     state.theme = pref.theme || state.theme;
     state.fontFamily = pref.font_family || state.fontFamily;

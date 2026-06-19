@@ -1,0 +1,16 @@
+{
+  "name": "biblia-online",
+  "version": "1.0.0",
+  "description": "Website premium para leitura da Bíblia",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx -y serve ."
+  },
+  "keywords": [
+    "bible",
+    "reader",
+    "offline"
+  ],
+  "author": "",
+  "license": "ISC"
+}
