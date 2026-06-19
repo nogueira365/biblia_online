@@ -1121,7 +1121,7 @@ async function pullDataFromCloud(userId) {
   const { data: pref, error } = await supabase.from("user_preferences").select("theme, font_family, font_size, current_translation, avatar_url, full_name, bio, social_name, birth_date, marital_status, gender").eq("user_id", userId).maybeSingle();
   
   if (error) {
-    alert("Erro ao puxar dados: " + error.message);
+    console.error("Erro ao puxar dados:", error.message);
   }
 
   if (pref) {
@@ -1267,13 +1267,15 @@ async function cloudSavePreferences() {
     
     if (error) {
       console.error("Supabase Error ao salvar prefs:", error);
-      alert("Erro do Banco de Dados: " + error.message + " (Detalhes: " + error.details + ")");
+      if (typeof showToast === "function") {
+        showToast("Erro ao salvar preferências no banco de dados.", "error");
+      }
       throw error;
     }
 
     if (data && data.length > 0) {
       console.log("Upsert Success Data:", data[0]);
-      alert("Supabase salvou: Nome = " + data[0].full_name + " | Avatar_Url existe? " + !!data[0].avatar_url);
+      // Alerta de debug removido
     }
   } catch (error) {
     console.error("Erro ao salvar preferências visuais na nuvem:", error);
