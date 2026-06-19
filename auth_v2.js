@@ -988,25 +988,13 @@ async function uploadLocalDataToCloud(userId) {
       chapter: item.chapter,
       read_at: item.time || new Date().toISOString()
     }));
-    // O histórico não tem restrição de chave única estrita de conflito na inserção
     await supabase.from("reading_history").upsert(rows);
   }
-
-  // Preferências
-  await supabase.from("user_preferences").upsert({
-    user_id: userId,
-    theme: state.theme,
-    font_family: state.fontFamily,
-    font_size: state.fontSize,
-    current_translation: state.currentTranslation,
-    avatar_url: state.avatarUrl || null,
-    full_name: state.fullName || null,
-    bio: state.bio || null,
-    social_name: state.socialName || null,
-    birth_date: state.birthDate || null,
-    marital_status: state.maritalStatus || null,
-    gender: state.gender || null
-  }, { onConflict: "user_id" });
+  
+  // NOTA: As preferências do usuário (user_preferences) NÃO devem ser enviadas 
+  // automaticamente aqui, pois isso sobrescreveria os dados da nuvem com dados 
+  // locais vazios se o usuário acessar de um novo dispositivo ou limpar o cache.
+  // As preferências só são enviadas via cloudSavePreferences() quando o usuário clica em Salvar.
 }
 
 // Salva apenas as preferências e dados do perfil na nuvem
