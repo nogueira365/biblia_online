@@ -533,7 +533,23 @@ function initUI() {
       sidebar.classList.remove("open");
       document.getElementById("overlay").style.display = "none";
     }
+    
+    // Fechar menu de ações do topo
+    const topActions = document.querySelector(".top-actions");
+    if (topActions && topActions.classList.contains("open")) {
+      topActions.classList.remove("open");
+    }
   });
+
+  // Toggle do menu de ações (sanduíche direito) no mobile
+  const btnMobileActions = document.getElementById("btn-mobile-actions");
+  if (btnMobileActions) {
+    btnMobileActions.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const topActions = document.querySelector(".top-actions");
+      topActions.classList.toggle("open");
+    });
+  }
 
   // ============================================================
   // VERSÍCULO DO DIA — Botões de ação
