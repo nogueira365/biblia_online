@@ -1485,14 +1485,31 @@ function hidePendingScreen() {
 
 function showAdminButton() {
   const btnAdmin = document.getElementById("btn-admin");
+  const btnAdminDropdown = document.getElementById("btn-admin-dropdown");
+  
   if (btnAdmin) {
     btnAdmin.style.display = "flex";
-    btnAdmin.addEventListener("click", () => {
+    // Evita duplicar listeners
+    btnAdmin.onclick = () => {
       if (typeof openDrawer === "function") {
         openDrawer("admin-drawer");
       }
       loadAdminPanel();
-    });
+    };
+  }
+  
+  if (btnAdminDropdown) {
+    btnAdminDropdown.style.display = "flex";
+    btnAdminDropdown.onclick = () => {
+      if (typeof openDrawer === "function") {
+        openDrawer("admin-drawer");
+        
+        // Fechar o dropdown do usuário caso esteja aberto
+        const userDropdown = document.getElementById("user-dropdown");
+        if (userDropdown) userDropdown.style.display = "none";
+      }
+      loadAdminPanel();
+    };
   }
   // Carregar contagem de pendentes
   loadAdminPendingCount();
@@ -1500,7 +1517,9 @@ function showAdminButton() {
 
 function hideAdminButton() {
   const btnAdmin = document.getElementById("btn-admin");
+  const btnAdminDropdown = document.getElementById("btn-admin-dropdown");
   if (btnAdmin) btnAdmin.style.display = "none";
+  if (btnAdminDropdown) btnAdminDropdown.style.display = "none";
 }
 
 async function loadAdminPendingCount() {
