@@ -419,11 +419,25 @@ function initAuthUI() {
     btnLogout.addEventListener("click", async () => {
       try {
         updateSyncIndicator("working");
+        
+        // LIMPEZA FORÇADA ANTES DO LOGOUT
+        // Impede que os dados da conta atual fiquem na memória caso o reload falhe
+        localStorage.removeItem("bible_reader_state");
+        if (typeof state !== "undefined") {
+          state.highlights = {};
+          state.notes = {};
+          state.favorites = [];
+          state.history = [];
+          state.readStatus = { verses: [], books: [], chapters: [] };
+        }
+
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
         
         userDropdown.style.display = "none";
         showToast("Você saiu da sua conta.", "success");
+        window.location.reload(); // Forçar o reload imediatamente
+
       } catch (error) {
         console.error("Erro ao sair da conta:", error);
         showToast("Erro ao sair da conta.", "error");
@@ -800,7 +814,7 @@ function listenToAuthChanges() {
         updateSyncIndicator("online");
         // Como não há mais aprovações, não mostramos mais o botão admin
         hideAdminButton();
-
+      } catch (err) {
         console.error("Erro durante o carregamento de dados após login:", err);
         updateSyncIndicator("offline");
       }
@@ -899,7 +913,11 @@ async function syncCloudData() {
 
 // Envia dados salvos localmente (Highlights, Notes, Favorites, History, Plans) para a nuvem
 async function uploadLocalDataToCloud(userId) {
-  // Marcações
+  // Verifica se o objeto state existe e tem alguma informação minimamente relevante
+  // para evitar enviar um objeto vazio (ex: após limpeza de cache/logout)
+  if (!state || Object.keys(state).length === 0) return;
+
+  // Highlights
   if (state.highlights && Object.keys(state.highlights).length > 0) {
     const rows = Object.entries(state.highlights).map(([key, val]) => ({
       user_id: userId,
@@ -1267,37 +1285,33 @@ async function cloudSavePreferences() {
   }
 }
 
-// Atualiza a exibição da foto de perfil nos elementos HTML do avatar
-function updateAvatarUI(avatarUrl) {
+// Atualiza as imagens de avatar na interface
+function updateAvatarUI(base64Url) {
+  const avatarHeader = document.getElementById("user-avatar-img");
+  const avatarDropdown = document.getElementById("dropdown-avatar-img");
+  const avatarProfile = document.getElementById("profile-avatar-img");
   const avatarSvg = document.getElementById("user-avatar-svg");
-  const avatarImgHeader = document.getElementById("user-avatar-img");
-  const avatarImgDropdown = document.getElementById("dropdown-avatar-img");
-  const avatarImgProfile = document.getElementById("profile-avatar-img");
 
-  if (avatarUrl && avatarUrl.trim() !== "") {
+  if (base64Url) {
+    if (avatarHeader) {
+      avatarHeader.src = base64Url;
+      avatarHeader.style.display = "block";
+    }
     if (avatarSvg) avatarSvg.style.display = "none";
-    if (avatarImgHeader) {
-      avatarImgHeader.src = avatarUrl;
-      avatarImgHeader.style.display = "block";
-    }
-    if (avatarImgDropdown) {
-      avatarImgDropdown.src = avatarUrl;
-    }
-    if (avatarImgProfile) {
-      avatarImgProfile.src = avatarUrl;
-    }
+    if (avatarProfile) avatarProfile.src = base64Url;
+    if (avatarDropdown) avatarDropdown.src = base64Url;
   } else {
     if (avatarSvg) avatarSvg.style.display = "block";
-    if (avatarImgHeader) {
-      avatarImgHeader.style.display = "none";
-      avatarImgHeader.src = "";
+    if (avatarHeader) {
+      avatarHeader.style.display = "none";
+      avatarHeader.src = "";
     }
     const placeholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364748b'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
-    if (avatarImgDropdown) {
-      avatarImgDropdown.src = placeholder;
+    if (avatarDropdown) {
+      avatarDropdown.src = placeholder;
     }
-    if (avatarImgProfile) {
-      avatarImgProfile.src = placeholder;
+    if (avatarProfile) {
+      avatarProfile.src = placeholder;
     }
   }
 }

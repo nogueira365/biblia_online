@@ -1669,6 +1669,19 @@ header {
   display: block;
 }
 
+.user-avatar-img-header {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+#user-avatar-svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
 .avatar-upload-label {
   position: absolute;
   bottom: -2px;
