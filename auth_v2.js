@@ -416,34 +416,20 @@ function initAuthUI() {
 
   // Logout (Sair)
   if (btnLogout) {
-    btnLogout.addEventListener("click", async () => {
-      try {
-        updateSyncIndicator("working");
-        
-        // LIMPEZA FORÇADA ANTES DO LOGOUT
-        // Impede que os dados da conta atual fiquem na memória caso o reload falhe
-        localStorage.removeItem("bible_reader_state");
-        if (typeof state !== "undefined") {
-          state.highlights = {};
-          state.notes = {};
-          state.favorites = [];
-          state.history = [];
-          state.readStatus = { verses: [], books: [], chapters: [] };
-        }
-
-        try {
-          await supabase.auth.signOut();
-        } catch (err) {
-          console.warn("Erro silencioso ao fazer signOut na nuvem:", err);
-        }
-        
-        userDropdown.style.display = "none";
-        showToast("Você saiu da sua conta.", "success");
-        setTimeout(() => window.location.reload(), 500); // Forçar o reload
-
-      } catch (error) {
-        console.error("Erro geral ao sair da conta:", error);
-        showToast("Erro ao sair da conta.", "error");
+    btnLogout.addEventListener("click", () => {
+      // Limpeza forçada na memória local
+      localStorage.removeItem("bible_reader_state");
+      
+      // Feedback visual rápido
+      if (typeof showToast === "function") showToast("Saindo da conta...", "success");
+      
+      // Tentar sair do Supabase e recarregar a página independentemente do resultado
+      if (supabase) {
+        supabase.auth.signOut().catch(err => console.warn(err)).finally(() => {
+          window.location.reload();
+        });
+      } else {
+        window.location.reload();
       }
     });
   }
