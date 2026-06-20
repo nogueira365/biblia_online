@@ -791,29 +791,20 @@ function listenToAuthChanges() {
       updateSyncIndicator("working");
       
       try {
-        // Verificar se o usuário tem registro de aprovação
-        const approvalStatus = await checkUserApproval(session.user);
+        // Cadastro direto: sem necessidade de aprovação
+        syncState.isApproved = true;
+        hidePendingScreen();
         
-        if (approvalStatus === "approved") {
-          syncState.isApproved = true;
-          hidePendingScreen();
-          
-          // Sincronizar / Carregar dados da nuvem
-          await syncCloudData();
-          updateSyncIndicator("online");
-          
-          // Se for admin, mostrar botão e carregar painel
-          if (syncState.isAdmin) {
-            showAdminButton();
-          }
-        } else {
-          // Usuário pendente ou rejeitado
-          syncState.isApproved = false;
-          showPendingScreen(session.user.email);
-          updateSyncIndicator("offline");
+        // Sincronizar / Carregar dados da nuvem
+        await syncCloudData();
+        updateSyncIndicator("online");
+        
+        // Se for admin, mostrar botão (opcional, já que não há mais o que aprovar)
+        if (syncState.isAdmin) {
+          showAdminButton();
         }
       } catch (err) {
-        console.error("Erro durante a verificação de aprovação:", err);
+        console.error("Erro durante o carregamento de dados após login:", err);
         updateSyncIndicator("offline");
       }
     } else {

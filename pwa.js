@@ -68,3 +68,41 @@ if (btnDismiss) {
     }, 300);
   });
 }
+
+// Ações do banner iOS
+const btnIosDismiss = document.getElementById('pwa-btn-ios-dismiss');
+if (btnIosDismiss) {
+  btnIosDismiss.addEventListener('click', () => {
+    const iosBanner = document.getElementById('pwa-ios-banner');
+    if (iosBanner) iosBanner.classList.remove('show');
+    localStorage.setItem('pwa_ios_dismissed', 'true');
+    
+    setTimeout(() => {
+      if (iosBanner) iosBanner.style.display = 'none';
+    }, 300);
+  });
+}
+
+// Lógica independente de beforeinstallprompt para iOS (Safari não tem beforeinstallprompt)
+window.addEventListener('load', () => {
+  // Detecta se é dispositivo iOS
+  const isIos = () => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  };
+
+  // Verifica se já não estamos no modo standalone (PWA instalado)
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+  // Verifica se já dispensou o aviso no iOS
+  const iosDismissed = localStorage.getItem('pwa_ios_dismissed');
+
+  if (isIos() && !isStandalone && !iosDismissed) {
+    const iosBanner = document.getElementById('pwa-ios-banner');
+    if (iosBanner) {
+      iosBanner.style.display = 'flex';
+      setTimeout(() => iosBanner.classList.add('show'), 100);
+    }
+  }
+});
+
