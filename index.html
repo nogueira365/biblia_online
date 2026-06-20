@@ -193,15 +193,6 @@
         <span class="action-label">Plano de Leitura</span>
       </button>
 
-      <!-- Botão Admin (Visível apenas para administradores) -->
-      <button id="btn-admin" class="btn-icon" title="Painel Administrativo" aria-label="Painel Admin" style="display: none;">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-        </svg>
-        <span id="admin-badge" class="admin-badge" style="display: none;">0</span>
-        <span class="action-label">Painel Admin</span>
-      </button>
-      
       <!-- Botão de Autenticação e Menu de Usuário (Supabase) -->
       <div id="auth-header-container" class="auth-header-container">
         <button id="btn-auth" class="btn-icon" title="Entrar / Criar Conta" aria-label="Autenticação">
@@ -245,12 +236,7 @@
             </svg>
             <span>Sincronizar Agora</span>
           </button>
-          <button id="btn-admin-dropdown" class="dropdown-item" style="display: none; color: #10b981;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-            </svg>
-            <span>Painel Administrativo</span>
-          </button>
+
           <button id="btn-logout" class="dropdown-item logout-item">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -846,49 +832,6 @@
         Sair da Conta
       </button>
       <p class="pending-verse">"Esperei com paciência no Senhor, e ele se inclinou para mim, e ouviu o meu clamor."<br><em>— Salmos 40:1</em></p>
-    </div>
-  </div>
-
-  <!-- ==================== GAVETA ADMIN (PAINEL DE APROVAÇÃO) ==================== -->
-  <div id="admin-drawer" class="drawer">
-    <div class="drawer-header">
-      <h3 class="drawer-title">Painel Administrativo</h3>
-      <button class="btn-icon drawer-close" aria-label="Fechar painel admin">✕</button>
-    </div>
-    <div class="drawer-body">
-      <!-- Contadores -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
-        <div class="admin-stat-card">
-          <div id="admin-stat-pending" class="admin-stat-number" style="color: #f59e0b;">0</div>
-          <div class="admin-stat-label">Pendentes</div>
-        </div>
-        <div class="admin-stat-card">
-          <div id="admin-stat-approved" class="admin-stat-number" style="color: #10b981;">0</div>
-          <div class="admin-stat-label">Aprovados</div>
-        </div>
-        <div class="admin-stat-card">
-          <div id="admin-stat-rejected" class="admin-stat-number" style="color: #ef4444;">0</div>
-          <div class="admin-stat-label">Rejeitados</div>
-        </div>
-      </div>
-
-      <!-- Lista de Pendentes -->
-      <div style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        Usuários Pendentes
-      </div>
-      <div id="admin-pending-list" class="admin-users-list">
-        <div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário pendente</div>
-      </div>
-
-      <!-- Lista de Aprovados -->
-      <div style="font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 12px; margin-top: 20px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        Usuários Aprovados
-      </div>
-      <div id="admin-approved-list" class="admin-users-list">
-        <div style="text-align: center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">Nenhum usuário aprovado</div>
-      </div>
     </div>
   </div>
 
