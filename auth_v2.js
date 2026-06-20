@@ -705,6 +705,48 @@ function initAuthUI() {
       }
     });
   }
+
+  // Apagar Todos os Dados
+  const btnWipeData = document.getElementById("btn-wipe-data");
+  if (btnWipeData) {
+    btnWipeData.addEventListener("click", async () => {
+      const isConfirmed = confirm("ATENÇÃO: Você está prestes a excluir permanentemente todos os seus favoritos, notas, destaques e histórico de leitura.\n\nEssa ação não pode ser desfeita. Tem certeza de que deseja continuar?");
+      
+      if (isConfirmed) {
+        if (syncState.isLoggedIn && syncState.currentUser && supabase) {
+          try {
+            updateSyncIndicator("working");
+            const userId = syncState.currentUser.id;
+            
+            // Deletar do banco de dados (ignoramos erros de foreign key por causa das policies se houver)
+            await supabase.from("highlights").delete().eq("user_id", userId);
+            await supabase.from("notes").delete().eq("user_id", userId);
+            await supabase.from("favorites").delete().eq("user_id", userId);
+            await supabase.from("read_verses").delete().eq("user_id", userId);
+            await supabase.from("read_chapters").delete().eq("user_id", userId);
+            await supabase.from("read_books").delete().eq("user_id", userId);
+            await supabase.from("reading_plans").delete().eq("user_id", userId);
+            await supabase.from("reading_history").delete().eq("user_id", userId);
+            
+            // Limpar dados locais
+            localStorage.removeItem("bible_reader_state");
+            
+            alert("Todos os seus dados foram apagados com sucesso.");
+            window.location.reload();
+          } catch (error) {
+            console.error("Erro ao apagar dados:", error);
+            alert("Ocorreu um erro ao tentar apagar os dados da nuvem.");
+            updateSyncIndicator("online");
+          }
+        } else {
+          // Apenas local
+          localStorage.removeItem("bible_reader_state");
+          alert("Todos os seus dados locais foram apagados.");
+          window.location.reload();
+        }
+      }
+    });
+  }
 }
 
 // Processa e faz o upload do avatar (redimensiona para 96x96px JPEG e salva no estado/Supabase)
