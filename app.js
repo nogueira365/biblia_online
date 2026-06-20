@@ -1730,6 +1730,14 @@ async function renderFavoritesAndNotes() {
         const favIndex = state.favorites.indexOf(verseKey);
         if (favIndex > -1) state.favorites.splice(favIndex, 1);
 
+        // Excluir na nuvem se estiver logado
+        if (typeof syncState !== "undefined" && syncState.isLoggedIn && typeof supabase !== "undefined") {
+          const userId = syncState.currentUser.id;
+          supabase.from("highlights").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
+          supabase.from("notes").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
+          supabase.from("favorites").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
+        }
+
         // Atualizar o DOM se estiver na página atual
         const activeVerseEl = document.querySelector(`.verse-item[data-verse-key="${verseKey}"]`);
         if (activeVerseEl) {

@@ -431,15 +431,18 @@ function initAuthUI() {
           state.readStatus = { verses: [], books: [], chapters: [] };
         }
 
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        try {
+          await supabase.auth.signOut();
+        } catch (err) {
+          console.warn("Erro silencioso ao fazer signOut na nuvem:", err);
+        }
         
         userDropdown.style.display = "none";
         showToast("Você saiu da sua conta.", "success");
-        window.location.reload(); // Forçar o reload imediatamente
+        setTimeout(() => window.location.reload(), 500); // Forçar o reload
 
       } catch (error) {
-        console.error("Erro ao sair da conta:", error);
+        console.error("Erro geral ao sair da conta:", error);
         showToast("Erro ao sair da conta.", "error");
       }
     });
