@@ -865,6 +865,11 @@ header {
 .nav-text-full  { display: inline; }
 .nav-text-short { display: none; }
 
+@media (max-width: 768px) {
+  .nav-text-full  { display: none; }
+  .nav-text-short { display: inline; }
+}
+
 /* Botão de Capítulo Lido Ativo */
 .btn-read-active {
   background-color: var(--accent-muted) !important;

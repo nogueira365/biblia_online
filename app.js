@@ -1463,15 +1463,24 @@ function openVerseMenu(element, verseKey, verseNumber) {
 
   // Posicionar o menu próximo ao clique/elemento
   const rect = element.getBoundingClientRect();
-  const readerRect = document.getElementById("reader-pane").getBoundingClientRect();
+  
+  // Obtém as dimensões do menu para cálculo
+  const menuHeight = menu.offsetHeight;
+  const menuWidth = menu.offsetWidth || 220;
   
   // Calcular coordenadas relativas
   let top = rect.bottom + window.scrollY;
   let left = rect.left + window.scrollX;
 
-  // Ajustar limites
-  if (left + 220 > window.innerWidth) {
-    left = window.innerWidth - 240;
+  // Ajustar limites horizontais
+  if (left + menuWidth > window.innerWidth) {
+    left = window.innerWidth - menuWidth - 20;
+  }
+  
+  // Ajustar limites verticais para não esconder atrás da barra inferior (60px) ou fora da tela
+  if (rect.bottom + menuHeight > window.innerHeight - 70) {
+    // Posiciona o menu acima do versículo
+    top = rect.top + window.scrollY - menuHeight - 5;
   }
   
   menu.style.top = `${top}px`;
