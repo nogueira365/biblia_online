@@ -1483,6 +1483,13 @@ function openVerseMenu(element, verseKey, verseNumber) {
     top = rect.top + window.scrollY - menuHeight - 5;
   }
   
+  // Nova verificação: se ao colocar acima, ele cortar no topo ou ficar sob o header (aprox 64px)
+  const minTop = window.scrollY + 70;
+  if (top < minTop) {
+    // Trava o menu para que fique no mínimo logo abaixo do cabeçalho
+    top = minTop;
+  }
+  
   menu.style.top = `${top}px`;
   menu.style.left = `${left}px`;
 

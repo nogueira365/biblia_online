@@ -1444,7 +1444,7 @@ header {
   }
 
   .logo-img {
-    display: none !important;
+    height: 32px; /* Ligeiramente menor no mobile */
   }
 
   .logo-text {
@@ -1452,10 +1452,6 @@ header {
   }
 
   .mobile-actions-btn {
-    display: flex !important;
-  }
-
-  .mobile-only-btn {
     display: flex !important;
   }
 
