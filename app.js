@@ -64,18 +64,37 @@ document.addEventListener("DOMContentLoaded", () => {
         return; // Interrompe a execução, não esconde a landing page
       }
 
-      // Se estiver logado, prossegue removendo a landing page
+      // Ocultar (não remover) a landing page para poder voltar depois
       const landingPage = document.getElementById("landing-page");
       if (landingPage) {
         landingPage.classList.add("landing-exit");
         setTimeout(() => {
-          landingPage.remove();
+          landingPage.style.display = "none";
+          landingPage.classList.remove("landing-exit");
         }, 650);
       }
     });
   }
+
+  // Breadcrumb Home — volta para a landing page
+  const bcHome = document.getElementById("bc-home");
+  if (bcHome) {
+    bcHome.addEventListener("click", () => {
+      showLandingPage();
+    });
+  }
 });
 
+// Exibe a landing page novamente (ao clicar no home do breadcrumb)
+function showLandingPage() {
+  const landingPage = document.getElementById("landing-page");
+  if (!landingPage) return;
+  landingPage.style.display = "flex";
+  // Força reflow para a animação funcionar
+  void landingPage.offsetWidth;
+  landingPage.classList.add("landing-enter");
+  setTimeout(() => landingPage.classList.remove("landing-enter"), 650);
+}
 
 // Carrega os dados salvos no LocalStorage
 function loadStateFromLocalStorage() {
@@ -437,11 +456,33 @@ function initUI() {
     el.addEventListener("click", closeAllDrawers);
   });
 
-  // VOD Show Logic
+  // VOD Show Logic + Share Chapter Logic (delegação no documento pois o botão é recriado dinamicamente)
   document.addEventListener("click", (e) => {
     const vodShowBtn = e.target.closest("#btn-vod-show");
     if (vodShowBtn) {
       renderVerseOfTheDay();
+    }
+
+    // Compartilhar capítulo inteiro
+    const shareChapterBtn = e.target.closest("#btn-share-chapter");
+    if (shareChapterBtn) {
+      shareChapter();
+    }
+
+    // Compartilhar versículo individual (botão inline)
+    const shareVerseInlineBtn = e.target.closest(".btn-share-verse-inline");
+    if (shareVerseInlineBtn) {
+      e.stopPropagation();
+      const verseKey = shareVerseInlineBtn.dataset.verseKey;
+      const verseEl  = document.querySelector(`.verse-item[data-verse-key="${verseKey}"]`);
+      if (verseEl) {
+        const verseTextEl = verseEl.querySelector(".verse-text");
+        const verseNum    = verseEl.getAttribute("data-verse-number");
+        const bookData    = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
+        const refText     = `${bookData ? bookData.name : state.currentBook} ${state.currentChapter}:${verseNum}`;
+        const verseText   = verseTextEl ? verseTextEl.textContent : "";
+        shareVerse(verseText, refText, state.currentTranslation.toUpperCase());
+      }
     }
   });
 
@@ -548,6 +589,16 @@ function initUI() {
       e.stopPropagation();
       const topActions = document.querySelector(".top-actions");
       topActions.classList.toggle("open");
+    });
+  }
+
+  // Botão de fechar o menu mobile de ações
+  const btnCloseMobileActions = document.getElementById("btn-close-mobile-actions");
+  if (btnCloseMobileActions) {
+    btnCloseMobileActions.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const topActions = document.querySelector(".top-actions");
+      topActions.classList.remove("open");
     });
   }
 
@@ -931,11 +982,18 @@ async function loadActiveChapter() {
           ${versionLabel}
         </span>
       </div>
-      <button id="btn-vod-show" class="btn-icon" title="Versículo do Dia" aria-label="Versículo do Dia">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
-        </svg>
-      </button>
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <button id="btn-share-chapter" class="btn-icon" title="Compartilhar este capítulo" aria-label="Compartilhar capítulo">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+          </svg>
+        </button>
+        <button id="btn-vod-show" class="btn-icon" title="Versículo do Dia" aria-label="Versículo do Dia">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
+          </svg>
+        </button>
+      </div>
     `;
 
     // Atualizar Pills do cabeçalho
@@ -1062,6 +1120,11 @@ async function loadActiveChapter() {
           <input type="checkbox" class="verse-read-checkbox" ${window.isVerseRead(verseKey) ? 'checked' : ''} title="Marcar como lido" style="margin-right: 6px; cursor: pointer; accent-color: var(--accent-color);">
           <span class="verse-number">${v.number}</span>
           <span class="verse-text">${escapeHTML(v.text)}</span>
+          <button class="btn-share-verse-inline" data-verse-key="${verseKey}" title="Compartilhar versículo ${v.number}" aria-label="Compartilhar versículo ${v.number}">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+            </svg>
+          </button>
         `;
 
         // Checkbox click
@@ -1077,10 +1140,11 @@ async function loadActiveChapter() {
           addNoteButtonToVerse(verseDiv, verseKey);
         }
 
-        // Clique no versículo para abrir menu (ignorar se clicou no botão de nota ou checkbox)
+        // Clique no versículo para abrir menu (ignorar se clicou no botão de nota, checkbox ou share)
         verseDiv.addEventListener("click", (e) => {
           if (e.target.closest(".btn-verse-note")) return;
           if (e.target.classList.contains("verse-read-checkbox")) return;
+          if (e.target.closest(".btn-share-verse-inline")) return;
           e.stopPropagation();
           openVerseMenu(verseDiv, verseKey, v.number);
         });
@@ -1164,33 +1228,46 @@ function updateBottomNavigationUI() {
     return abbr.charAt(0).toUpperCase() + abbr.slice(1);
   };
 
+  // Helper: atualiza o texto do botão com nome completo e abreviado
+  function setNavBtnText(btn, fullText, shortText) {
+    const span = btn.querySelector(".nav-btn-text");
+    if (!span) return;
+    span.innerHTML = `<span class="nav-text-full">${fullText}</span><span class="nav-text-short">${shortText}</span>`;
+  }
+
   // Anterior
   if (state.currentChapter === 1 && bookIndex === 0) {
-    // Primeiro livro, primeiro capítulo: desabilitar anterior
     prevBtn.classList.add("disabled");
-    prevBtn.querySelector(".nav-btn-text").textContent = "Início";
+    setNavBtnText(prevBtn, "Início", "Início");
   } else {
     prevBtn.classList.remove("disabled");
     if (state.currentChapter > 1) {
-      prevBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter - 1}`;
+      const fullName  = `${bookData.name} ${state.currentChapter - 1}`;
+      const shortName = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter - 1}`;
+      setNavBtnText(prevBtn, fullName, shortName);
     } else {
-      const prevBook = BIBLE_BOOKS[bookIndex - 1];
-      prevBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(prevBook.abbrev)} ${prevBook.chapters}`;
+      const prevBook  = BIBLE_BOOKS[bookIndex - 1];
+      const fullName  = `${prevBook.name} ${prevBook.chapters}`;
+      const shortName = `${formatAbbrev(prevBook.abbrev)} ${prevBook.chapters}`;
+      setNavBtnText(prevBtn, fullName, shortName);
     }
   }
 
   // Próximo
   if (state.currentChapter === bookData.chapters && bookIndex === BIBLE_BOOKS.length - 1) {
-    // Último livro, último capítulo: desabilitar próximo
     nextBtn.classList.add("disabled");
-    nextBtn.querySelector(".nav-btn-text").textContent = "Fim";
+    setNavBtnText(nextBtn, "Fim", "Fim");
   } else {
     nextBtn.classList.remove("disabled");
     if (state.currentChapter < bookData.chapters) {
-      nextBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter + 1}`;
+      const fullName  = `${bookData.name} ${state.currentChapter + 1}`;
+      const shortName = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter + 1}`;
+      setNavBtnText(nextBtn, fullName, shortName);
     } else {
-      const nextBook = BIBLE_BOOKS[bookIndex + 1];
-      nextBtn.querySelector(".nav-btn-text").textContent = `${formatAbbrev(nextBook.abbrev)} 1`;
+      const nextBook  = BIBLE_BOOKS[bookIndex + 1];
+      const fullName  = `${nextBook.name} 1`;
+      const shortName = `${formatAbbrev(nextBook.abbrev)} 1`;
+      setNavBtnText(nextBtn, fullName, shortName);
     }
   }
 }
@@ -1246,6 +1323,15 @@ function initVerseContextMenu() {
   menu.addEventListener("click", (e) => {
     e.stopPropagation();
   });
+
+  // Botão de fechar o menu
+  const menuCloseBtn = document.getElementById("menu-btn-close");
+  if (menuCloseBtn) {
+    menuCloseBtn.addEventListener("click", () => {
+      menu.style.display = "none";
+      state.activeVerseKey = null;
+    });
+  }
 
   // Ações de Destaque (Cores)
   menu.querySelectorAll(".color-dot").forEach(dot => {
@@ -2496,6 +2582,53 @@ async function copyVerseToClipboard(text) {
     showToast("Versículo copiado para a área de transferência!", "success");
   } catch (err) {
     showToast("Não foi possível copiar o texto.", "error");
+  }
+}
+
+// ============================================================
+// COMPARTILHAR CAPÍTULO INTEIRO
+// ============================================================
+
+/**
+ * Compartilha o capítulo atual inteiro via Web Share API ou copia para clipboard.
+ * Coleta todos os versículos visíveis e formata como texto.
+ */
+async function shareChapter() {
+  const bookData   = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
+  const bookName   = bookData ? bookData.name : state.currentBook;
+  const chapter    = state.currentChapter;
+  const versionLbl = state.currentTranslation.toUpperCase();
+  const refText    = `${bookName} ${chapter} (${versionLbl})`;
+
+  // Coletar os versículos renderizados no DOM (modo normal, sem comparação)
+  let versesText = "";
+  document.querySelectorAll(".verse-item:not(.secondary-col)").forEach(el => {
+    const numEl  = el.querySelector(".verse-number");
+    const textEl = el.querySelector(".verse-text");
+    if (numEl && textEl) {
+      versesText += `${numEl.textContent}. ${textEl.textContent}\n`;
+    }
+  });
+
+  if (!versesText.trim()) {
+    showToast("Nenhum versículo encontrado para compartilhar.", "error");
+    return;
+  }
+
+  const shareTitle = `Bíblia Live — ${refText}`;
+  const shareText  = `${refText}\n\n${versesText.trim()}`;
+  const shareUrl   = window.location.href;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        await copyVerseToClipboard(shareText);
+      }
+    }
+  } else {
+    await copyVerseToClipboard(shareText);
   }
 }
 

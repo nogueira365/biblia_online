@@ -115,7 +115,8 @@
   <!-- Cabeçalho Principal (Header) -->
   <header>
     <div class="logo-container">
-      <button id="btn-mobile-menu" class="btn-icon mobile-only-btn" style="margin-right: 8px; display: none;" aria-label="Abrir menu de livros" title="Livros">
+      <!-- Botão mobile de livros: oculto no header (movido para a barra inferior) -->
+      <button id="btn-mobile-menu" class="btn-icon mobile-only-btn" style="display: none;" aria-label="Abrir menu de livros" title="Livros" hidden>
         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
           <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
         </svg>
@@ -161,6 +162,11 @@
     <!-- Ações e Menus de Configurações -->
     <div class="top-actions">
 
+      <!-- Botão de Fechar (mobile) -->
+      <button id="btn-close-mobile-actions" class="top-actions-close" aria-label="Fechar menu" title="Fechar">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        <span>Fechar</span>
+      </button>
       <!-- Botão Modo Comparação -->
       <button id="btn-compare" class="btn-icon" title="Comparar traduções lado a lado" aria-label="Comparar traduções">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
@@ -268,7 +274,9 @@
         <div class="reader-header-sticky-content">
           <!-- Breadcrumbs dinâmicos -->
           <nav class="breadcrumb" aria-label="Localização da leitura">
-            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <button id="bc-home" class="breadcrumb-home" aria-label="Ir para a tela inicial" title="Tela Inicial">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            </button>
             <span>Livros</span>
             <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
             <span id="bc-book">Provérbios</span>
@@ -366,11 +374,19 @@
     <footer class="bottom-nav-bar">
       <button id="btn-prev-chapter" class="nav-btn" aria-label="Capítulo anterior">
         <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        <span class="nav-btn-text">Anterior</span>
+        <span class="nav-btn-text"><span class="nav-text-full">Anterior</span><span class="nav-text-short">Anterior</span></span>
       </button>
-      
+
+      <!-- Botão central: abre sidebar de Livros &amp; Capítulos (visível somente no mobile) -->
+      <button id="btn-bottom-sidebar" class="nav-btn nav-btn-center" aria-label="Livros e Capítulos" title="Livros e Capítulos">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/>
+        </svg>
+        <span>Livros</span>
+      </button>
+
       <button id="btn-next-chapter" class="nav-btn" aria-label="Capítulo seguinte">
-        <span class="nav-btn-text">Provérbios 29</span>
+        <span class="nav-btn-text"><span class="nav-text-full">Próximo</span><span class="nav-text-short">Próximo</span></span>
         <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
       </button>
     </footer>
@@ -679,6 +695,11 @@
 
   <!-- MENU FLUTUANTE DE CONTEXTO DO VERSÍCULO (POPUP) -->
   <div id="verse-menu" class="verse-menu" role="menu">
+    <!-- Botão de Fechar -->
+    <button id="menu-btn-close" class="verse-menu-close" aria-label="Fechar menu" title="Fechar">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    </button>
+
     <!-- Destaque por cores -->
     <div class="color-dots">
       <div class="color-dot dot-clear" data-color-class="" title="Sem Destaque"></div>

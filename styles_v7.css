@@ -344,6 +344,11 @@ header {
   gap: 8px;
 }
 
+/* Botão de fechar o menu mobile de ações: oculto no desktop */
+.top-actions-close {
+  display: none;
+}
+
 .btn-icon {
   background: none;
   border: none;
@@ -382,6 +387,43 @@ header {
   width: 12px;
   height: 12px;
   fill: var(--text-muted);
+}
+
+/* Botão Home do Breadcrumb */
+.breadcrumb-home {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+  line-height: 0;
+}
+
+.breadcrumb-home:hover {
+  color: var(--accent-color);
+  background-color: var(--accent-muted);
+  transform: scale(1.1);
+}
+
+.breadcrumb-home svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+/* Animação de entrada da Landing Page ao voltar para o início */
+@keyframes landingFadeIn {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.landing-enter {
+  animation: landingFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
 }
 
 /* Estilo do Texto de Leitura */
@@ -508,6 +550,43 @@ header {
   opacity: 1;
   background-color: var(--accent-muted);
   transform: translateY(-50%) scale(1.2);
+}
+
+/* Botão de Compartilhar Versículo (inline, visível no hover) */
+.btn-share-verse-inline {
+  position: absolute;
+  right: 44px; /* 44px para não sobrepor o btn-verse-note */
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.verse-item:hover .btn-share-verse-inline {
+  opacity: 0.7;
+}
+
+.btn-share-verse-inline:hover {
+  opacity: 1 !important;
+  background-color: var(--accent-muted);
+  color: var(--accent-color);
+  transform: translateY(-50%) scale(1.15);
+}
+
+/* Ajuste de padding quando há só o botão de share (sem nota) */
+.verse-item:not(.has-note) .btn-share-verse-inline {
+  right: 12px;
 }
 
 /* Sidebar interna */
@@ -742,6 +821,11 @@ header {
   right: 320px;
 }
 
+/* Botão central da barra inferior (Livros & Capítulos) — oculto no desktop */
+.nav-btn-center {
+  display: none;
+}
+
 .nav-btn {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -776,6 +860,10 @@ header {
   background-color: var(--bg-surface);
   border-color: var(--border-color);
 }
+
+/* Texto dos botões de navegação: nome completo no desktop, abreviado no mobile */
+.nav-text-full  { display: inline; }
+.nav-text-short { display: none; }
 
 /* Botão de Capítulo Lido Ativo */
 .btn-read-active {
@@ -971,12 +1059,36 @@ header {
   border: 1px solid var(--border-color);
   box-shadow: 0 4px 12px var(--shadow-color);
   border-radius: 6px;
-  padding: 8px;
+  padding: 28px 8px 8px 8px;
   z-index: 150;
   display: none;
   flex-direction: column;
   gap: 8px;
   width: 220px;
+}
+
+/* Botão de fechar o menu de versículo */
+.verse-menu-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.verse-menu-close:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
 }
 
 .color-dots {
@@ -1346,6 +1458,30 @@ header {
 
   .top-actions.open {
     display: flex !important;
+  }
+
+  /* Botão de fechar o menu mobile */
+  .top-actions-close {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 4px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    border-radius: 0;
+    text-align: left;
+  }
+
+  .top-actions-close:hover {
+    background-color: var(--bg-surface-hover);
+    color: var(--text-primary);
   }
 
   .top-actions .btn-icon {
