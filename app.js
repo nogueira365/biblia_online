@@ -567,6 +567,17 @@ function initUI() {
     });
   }
 
+  // Botão central da barra inferior — abre o sidebar de Livros & Capítulos (mobile)
+  const btnBottomSidebar = document.getElementById("btn-bottom-sidebar");
+  if (btnBottomSidebar) {
+    btnBottomSidebar.addEventListener("click", () => {
+      const sidebar = document.querySelector(".sidebar-pane");
+      sidebar.classList.toggle("open");
+      const overlay = document.getElementById("overlay");
+      overlay.style.display = sidebar.classList.contains("open") ? "block" : "none";
+    });
+  }
+
   // Fechar sidebar mobile ao clicar no overlay
   document.getElementById("overlay").addEventListener("click", () => {
     const sidebar = document.querySelector(".sidebar-pane");

@@ -1059,7 +1059,7 @@ header {
   border: 1px solid var(--border-color);
   box-shadow: 0 4px 12px var(--shadow-color);
   border-radius: 6px;
-  padding: 28px 8px 8px 8px;
+  padding: 8px;
   z-index: 150;
   display: none;
   flex-direction: column;
@@ -1067,17 +1067,30 @@ header {
   width: 220px;
 }
 
+/* Cabeçalho do menu de versículo */
+.verse-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 8px 4px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.verse-menu-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 /* Botão de fechar o menu de versículo */
 .verse-menu-close {
-  position: absolute;
-  top: 6px;
-  right: 6px;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   display: flex;
   align-items: center;
