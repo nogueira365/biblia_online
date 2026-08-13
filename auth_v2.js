@@ -101,6 +101,12 @@ async function cloudSaveReadBook(bookKey, isAdding) {
       await supabase.from("read_books")
         .delete()
         .match({ user_id: syncState.currentUser.id, book_key: bookKey });
+      
+      // Também desmarca todos os capítulos vinculados ao livro
+      await supabase.from("read_chapters")
+        .delete()
+        .eq("user_id", syncState.currentUser.id)
+        .like("chapter_key", `${bookKey}-%`);
     }
   } catch (error) {
     console.error("Erro ao sincronizar livro lido:", error);
@@ -440,7 +446,7 @@ function initAuthUI() {
       if (syncState.isLoggedIn) {
         try {
           updateSyncIndicator("working");
-          await syncCloudData();
+          await syncCloudData(true);
           showToast("Sincronização em nuvem concluída!", "success");
         } catch (error) {
           console.error("Erro na sincronização:", error);
@@ -841,7 +847,7 @@ function listenToAuthChanges() {
         hidePendingScreen();
         
         // Sincronizar / Carregar dados da nuvem
-        await syncCloudData();
+        await syncCloudData(false);
         updateSyncIndicator("online");
         // Como não há mais aprovações, não mostramos mais o botão admin
         hideAdminButton();
@@ -899,8 +905,8 @@ function updateSyncIndicator(status) {
 // FUNÇÕES DE SINCRONIZAÇÃO DE DADOS COM O SUPABASE
 // ==========================================================================
 
-// Sincroniza dados empurrando itens locais do LocalStorage e puxando dados da nuvem
-async function syncCloudData() {
+// Sincroniza dados empurrando itens locais do LocalStorage (se solicitado) e puxando dados da nuvem
+async function syncCloudData(pushLocal = false) {
   if (!supabase || !syncState.currentUser) return;
   const userId = syncState.currentUser.id;
 
@@ -1069,7 +1075,7 @@ async function cloudSavePreferences() {
 // Puxa os dados da nuvem para preencher o estado local da aplicação
 async function pullDataFromCloud(userId) {
   // 1. Buscar Marcações (Highlights)
-  const { data: highlights } = await supabase.from("highlights").select("verse_key, color_class").eq("user_id", userId);
+  const { data: highlights } = await supabase.from("highlights").select("verse_key, color_class").eq("user_id", userId).limit(50000);
   state.highlights = {};
   if (highlights) {
     highlights.forEach(row => {
@@ -1078,7 +1084,7 @@ async function pullDataFromCloud(userId) {
   }
 
   // 2. Buscar Notas (Notes)
-  const { data: notes } = await supabase.from("notes").select("verse_key, content").eq("user_id", userId);
+  const { data: notes } = await supabase.from("notes").select("verse_key, content").eq("user_id", userId).limit(50000);
   state.notes = {};
   if (notes) {
     notes.forEach(row => {
@@ -1087,14 +1093,14 @@ async function pullDataFromCloud(userId) {
   }
 
   // 3. Buscar Favoritos (Favorites)
-  const { data: favorites } = await supabase.from("favorites").select("verse_key").eq("user_id", userId);
+  const { data: favorites } = await supabase.from("favorites").select("verse_key").eq("user_id", userId).limit(50000);
   state.favorites = [];
   if (favorites) {
     state.favorites = favorites.map(row => row.verse_key);
   }
 
   // 3.1 Buscar Versículos Lidos
-  const { data: readVerses } = await supabase.from("read_verses").select("verse_key").eq("user_id", userId);
+  const { data: readVerses } = await supabase.from("read_verses").select("verse_key").eq("user_id", userId).limit(50000);
   if (!state.readStatus) state.readStatus = { verses: [], chapters: [] };
   if (!state.readStatus.verses) state.readStatus.verses = [];
   if (readVerses) {
@@ -1102,21 +1108,21 @@ async function pullDataFromCloud(userId) {
   }
 
   // 3.2 Buscar Capítulos Lidos
-  const { data: readChapters } = await supabase.from("read_chapters").select("chapter_key").eq("user_id", userId);
+  const { data: readChapters } = await supabase.from("read_chapters").select("chapter_key").eq("user_id", userId).limit(5000);
   if (!state.readStatus.chapters) state.readStatus.chapters = [];
   if (readChapters) {
     state.readStatus.chapters = readChapters.map(row => row.chapter_key);
   }
 
   // 3.3 Buscar Livros Lidos
-  const { data: readBooks } = await supabase.from("read_books").select("book_key").eq("user_id", userId);
+  const { data: readBooks } = await supabase.from("read_books").select("book_key").eq("user_id", userId).limit(5000);
   if (!state.readStatus.books) state.readStatus.books = [];
   if (readBooks) {
     state.readStatus.books = readBooks.map(row => row.book_key);
   }
 
   // 4. Buscar Plano de Leitura
-  const { data: plans } = await supabase.from("reading_plans").select("plan_id, day_key, completed").eq("user_id", userId);
+  const { data: plans } = await supabase.from("reading_plans").select("plan_id, day_key, completed").eq("user_id", userId).limit(10000);
   state.readingPlans = { activePlanId: state.readingPlans.activePlanId || "", progress: {} };
   if (plans) {
     plans.forEach(row => {

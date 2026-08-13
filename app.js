@@ -532,14 +532,27 @@ function initUI() {
   if (btnMarkEntireBookRead) {
     btnMarkEntireBookRead.addEventListener("click", () => {
       const bookKey = state.currentBook;
-      const index = state.readStatus.books.indexOf(bookKey);
+      const isRead = window.isBookRead(bookKey);
       
-      if (index > -1) {
-        state.readStatus.books.splice(index, 1);
+      if (isRead) {
+        // Desmarcar o livro
+        const index = state.readStatus.books.indexOf(bookKey);
+        if (index > -1) {
+          state.readStatus.books.splice(index, 1);
+        }
+        
+        // Desmarcar todos os capítulos locais também
+        if (state.readStatus.chapters) {
+          state.readStatus.chapters = state.readStatus.chapters.filter(chap => !chap.startsWith(`${bookKey}-`));
+        }
+
         showToast("Livro marcado como não lido.", "success");
         if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(bookKey, false);
       } else {
-        state.readStatus.books.push(bookKey);
+        // Marcar o livro
+        if (!state.readStatus.books.includes(bookKey)) {
+          state.readStatus.books.push(bookKey);
+        }
         showToast("Livro marcado como lido!", "success");
         if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(bookKey, true);
       }
