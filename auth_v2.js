@@ -915,9 +915,13 @@ async function syncCloudData(pushLocal = false) {
   if (typeof state === "undefined") return;
 
   try {
+    updateSyncIndicator("syncing");
+
     // 2. Mesclar dados locais de localStorage para a nuvem
     // Se o usuário já tiver dados no LocalStorage antes de logar, nós fazemos o upload deles.
-    await uploadLocalDataToCloud(userId);
+    if (pushLocal) {
+      await uploadLocalDataToCloud(userId);
+    }
 
     // 3. Puxar todos os dados mais recentes do Supabase para o estado local
     await pullDataFromCloud(userId);
@@ -942,8 +946,11 @@ async function syncCloudData(pushLocal = false) {
     if (planDrawer && planDrawer.classList.contains("open") && typeof renderReadingPlan === "function") {
       renderReadingPlan();
     }
+    
+    updateSyncIndicator("online");
   } catch (error) {
     console.error("Falha ao sincronizar dados com o Supabase:", error);
+    updateSyncIndicator("offline");
     throw error;
   }
 }
