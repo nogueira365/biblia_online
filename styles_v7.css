@@ -822,8 +822,14 @@ header {
 }
 
 /* Botão central da barra inferior (Livros & Capítulos) — oculto no desktop */
-.nav-btn-center {
+.nav-btn.nav-btn-center {
   display: none;
+}
+
+@media (max-width: 768px) {
+  .nav-btn.nav-btn-center {
+    display: flex;
+  }
 }
 
 .nav-btn {
