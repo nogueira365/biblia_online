@@ -1,52 +1,58 @@
 # Guia de Configuração do Supabase para o Bíblia Live ⚡
 
-Como escolhemos a **Opção Supabase**, não precisamos programar nenhum servidor backend do zero! O Supabase cuida de toda a segurança, banco de dados e autenticação na nuvem.
+O Supabase cuida do banco de dados, da autenticação e da segurança (RLS) na nuvem. Não há servidor próprio.
 
-Siga os passos simples abaixo para configurar a sua conta e conectar o site ao banco de dados:
+> **Nunca coloque senhas neste repositório.** Tudo aqui é publicado junto com o site.
+> A única chave que vai no código é a chave pública (`anon`/publishable), que é protegida pelas políticas RLS.
 
 ---
 
-## Passo 1: Criar a Conta e o Projeto no Supabase
-1. Acesse [Supabase.com](https://supabase.com) e crie uma conta gratuita (pode usar sua conta do GitHub ou Google).
-2. No painel, clique em **New Project** (Novo Projeto).
-3. Selecione a organização padrão e preencha os dados:
+## Passo 1: Criar o projeto
+1. Acesse [supabase.com](https://supabase.com) e crie uma conta.
+2. Clique em **New Project** e preencha:
    * **Name**: `Bíblia Live`
-   * **Database Password**: Digite uma senha forte e anote-a em algum lugar (você não precisará dela no dia a dia, mas guarde-a(tB6N6^Zq8-aqaGx) .
-   * **Region**: Selecione uma região próxima (ex: `South America (São Paulo)` para melhor performance no Brasil).
-   * **Pricing Plan**: Escolha o plano **Free** (Gratuito).
-4. Clique em **Create new project** e aguarde alguns minutos enquanto o Supabase cria a infraestrutura.
+   * **Database Password**: uma senha forte, guardada em um gerenciador de senhas (fora deste repositório).
+   * **Region**: `South America (São Paulo)`.
+   * **Pricing Plan**: Free.
 
 ---
 
-## Passo 2: Criar as Tabelas no Banco de Dados
-1. No menu lateral esquerdo do painel do Supabase, clique no ícone **SQL Editor** (um ícone com `SQL`).
-2. Clique em **New query** (Nova Consulta).
-3. Abra o arquivo [supabase_setup.sql](file:///c:/Users/francisco.junior/Desktop/Biblia/supabase_setup.sql) gerado na pasta do seu projeto.
-4. Copie todo o conteúdo desse arquivo SQL e cole-o no campo de texto do editor no Supabase.
-5. Clique no botão **Run** (Executar) no canto inferior direito do editor.
-6. Você verá uma mensagem de sucesso indicando que as tabelas e políticas de segurança foram criadas!
+## Passo 2: Criar as tabelas
+No **SQL Editor** do Supabase, execute, nesta ordem, os arquivos da pasta [`supabase/`](supabase/):
 
----
+1. [`supabase_setup.sql`](supabase/supabase_setup.sql): tabelas do usuário (marcações, notas, favoritos, leituras, planos, histórico, preferências) e políticas RLS.
+2. [`reading_plans_catalog.sql`](supabase/reading_plans_catalog.sql): catálogo de planos de leitura.
+3. [`security_fixes.sql`](supabase/security_fixes.sql): remove a tabela antiga de aprovação de usuários e padroniza a coluna `birth_date`.
 
-## Passo 3: Ativar o Login com o Google (Opcional, mas Recomendado)
-1. No menu lateral esquerdo, clique no ícone **Authentication** (ícone de cadeado/usuário) e vá na aba **Providers**.
-2. Procure por **Google** na lista de provedores e ative-o.
-3. Para configurar completamente o login com o Google, você precisará criar credenciais no *Google Cloud Console* e colar o `Client ID` e `Client Secret` no painel do Supabase.
-   > **Nota**: Se quiser começar mais rápido, o login tradicional por **E-mail e Senha** já estará funcionando imediatamente sem nenhuma configuração extra! Podemos configurar o Google juntos depois.
+Todos podem ser executados mais de uma vez.
 
----
+### Planos de leitura
+Os planos são definidos em [`reading_plans.js`](reading_plans.js), a fonte única usada pelo app.
+Depois de alterar um plano, gere o SQL do catálogo e execute-o no Supabase:
 
-## Passo 4: Conectar as Chaves ao Site
-1. No painel do seu projeto no Supabase, clique no ícone de **Settings** (Engrenagem no canto inferior esquerdo) e acesse a seção **API**.
-2. Em **Project API keys**, copie os seguintes valores:
-   * **Project URL**: Uma URL que começa com `https://...`
-   * **anon/public key**: Uma chave longa contendo letras e números.
-3. Crie um arquivo no seu computador chamado `config.js` na mesma pasta do projeto e adicione o seguinte código com as chaves que você copiou:
-
-```javascript
-// config.js
-const SUPABASE_URL = "SUA_PROJECT_URL_AQUI";
-const SUPABASE_ANON_KEY = "SUA_ANON_PUBLIC_KEY_AQUI";
+```bash
+node scripts/generate_plans_sql.js
 ```
 
-*(Não se preocupe, adicionaremos o suporte a esse arquivo de chaves de forma segura no projeto!).*
+---
+
+## Passo 3: Login com o Google (opcional)
+1. Em **Authentication → Providers**, ative **Google**.
+2. Crie as credenciais no *Google Cloud Console* e cole o `Client ID` e o `Client Secret` no Supabase.
+3. Em **Authentication → URL Configuration**, cadastre o domínio do site (ex.: `https://biblialive.com`) como URL de redirecionamento.
+
+O login por e-mail e senha funciona sem configuração extra.
+
+---
+
+## Passo 4: Conectar o site
+Em **Settings → API**, copie a **Project URL** e a chave **anon/publishable** para o [`config.js`](config.js):
+
+```javascript
+const CONFIG = {
+  SUPABASE_URL: "https://SEU-PROJETO.supabase.co",
+  SUPABASE_ANON_KEY: "SUA_CHAVE_PUBLICA"
+};
+```
+
+Sem essas chaves, o app funciona em modo local (sem conta e sem sincronização).

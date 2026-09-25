@@ -67,25 +67,7 @@
     panelInner.className = "cs-panel-inner";
 
     // ── Montar opções ─────────────────────────────────────────
-    Array.from(selectEl.options).forEach((opt) => {
-      const item = document.createElement("div");
-      item.className = "cs-option";
-      item.setAttribute("role", "option");
-      item.dataset.value = opt.value;
-      item.textContent = opt.textContent;
-
-      if (opt.value === "") {
-        item.classList.add("cs-option-placeholder");
-      }
-
-      item.addEventListener("click", (e) => {
-        e.stopPropagation();
-        selectValue(opt.value);
-        closePanel();
-      });
-
-      panelInner.appendChild(item);
-    });
+    buildOptions(selectEl, panelInner);
 
     // ── Montar wrapper ────────────────────────────────────────
     panel.appendChild(panelInner);
@@ -111,19 +93,54 @@
       wrapper.classList.add("cs-open");
       trigger.setAttribute("aria-expanded", "true");
 
-      // Scroll para o item selecionado
+      // Destacar e rolar até o item selecionado
       const selected = panel.querySelector(".cs-option.cs-selected");
-      if (selected) {
-        requestAnimationFrame(() => {
-          selected.scrollIntoView({ block: "nearest" });
-        });
-      }
+      setActiveOption(selected || panel.querySelector(".cs-option"));
     }
 
     function closePanel() {
       wrapper.classList.remove("cs-open");
       trigger.setAttribute("aria-expanded", "false");
+      setActiveOption(null);
     }
+
+    // Opção destacada pela navegação por teclado
+    function setActiveOption(item) {
+      panel.querySelectorAll(".cs-option.cs-active").forEach(el => el.classList.remove("cs-active"));
+      if (!item) return;
+      item.classList.add("cs-active");
+      requestAnimationFrame(() => item.scrollIntoView({ block: "nearest" }));
+    }
+
+    // Teclado: setas/Home/End navegam, Enter/Espaço selecionam, Esc fecha
+    trigger.addEventListener("keydown", (e) => {
+      const options = Array.from(panel.querySelectorAll(".cs-option"));
+      if (options.length === 0) return;
+      const isOpen = wrapper.classList.contains("cs-open");
+      const active = panel.querySelector(".cs-option.cs-active");
+      const index = options.indexOf(active);
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!isOpen) {
+          closeAllPanels();
+          openPanel();
+          return;
+        }
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        const next = index < 0 ? 0 : Math.min(options.length - 1, Math.max(0, index + step));
+        setActiveOption(options[next]);
+      } else if ((e.key === "Home" || e.key === "End") && isOpen) {
+        e.preventDefault();
+        setActiveOption(e.key === "Home" ? options[0] : options[options.length - 1]);
+      } else if ((e.key === "Enter" || e.key === " ") && isOpen && active) {
+        e.preventDefault();
+        selectValue(active.dataset.value);
+        closePanel();
+      } else if (e.key === "Tab" && isOpen) {
+        closePanel();
+      }
+    });
 
     function selectValue(value) {
       // Sincronizar com o select original
@@ -134,6 +151,10 @@
 
       syncFromOriginal();
     }
+    selectEl._csSelect = (value) => {
+      selectValue(value);
+      closePanel();
+    };
 
     function syncFromOriginal() {
       const selectedOpt = selectEl.options[selectEl.selectedIndex];
@@ -158,14 +179,43 @@
     // Ex: translationSelect.value = "nvi" → dispatchEvent(new Event("_sync"))
     selectEl.addEventListener("_sync", syncFromOriginal);
 
-    // Fechar com Escape
+    // Fechar com Escape, devolvendo o foco ao botão
     wrapper.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closePanel();
+      if (e.key === "Escape" && wrapper.classList.contains("cs-open")) {
+        closePanel();
+        trigger.focus();
+      }
     });
 
     // Expor referência ao wrapper a partir do select original
     selectEl._csWrapper = wrapper;
     selectEl._csSync = syncFromOriginal;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  buildOptions(selectEl, panelInner)
+  //  Cria os itens do painel a partir das <option> do select original.
+  // ─────────────────────────────────────────────────────────────
+  function buildOptions(selectEl, panelInner) {
+    panelInner.innerHTML = "";
+    Array.from(selectEl.options).forEach((opt) => {
+      const item = document.createElement("div");
+      item.className = "cs-option";
+      item.setAttribute("role", "option");
+      item.dataset.value = opt.value;
+      item.textContent = opt.textContent;
+
+      if (opt.value === "") {
+        item.classList.add("cs-option-placeholder");
+      }
+
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (selectEl._csSelect) selectEl._csSelect(opt.value);
+      });
+
+      panelInner.appendChild(item);
+    });
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -205,41 +255,11 @@
   window.updateCustomSelect = function (selectEl) {
     if (!selectEl || !selectEl._customSelectInitialized || !selectEl._csWrapper) return;
 
-    const wrapper = selectEl._csWrapper;
-    const panelInner = wrapper.querySelector(".cs-panel-inner");
+    const panelInner = selectEl._csWrapper.querySelector(".cs-panel-inner");
     if (!panelInner) return;
 
-    // Limpar as opções antigas
-    panelInner.innerHTML = "";
-
     // Recriar opções
-    Array.from(selectEl.options).forEach((opt) => {
-      const item = document.createElement("div");
-      item.className = "cs-option";
-      item.setAttribute("role", "option");
-      item.dataset.value = opt.value;
-      item.textContent = opt.textContent;
-
-      if (opt.value === "") {
-        item.classList.add("cs-option-placeholder");
-      }
-
-      item.addEventListener("click", (e) => {
-        e.stopPropagation();
-        
-        // selectValue logic
-        selectEl.value = opt.value;
-        selectEl.dispatchEvent(new Event("change", { bubbles: true }));
-        if (selectEl._csSync) selectEl._csSync();
-
-        // closePanel logic
-        wrapper.classList.remove("cs-open");
-        const trigger = wrapper.querySelector(".cs-trigger");
-        if (trigger) trigger.setAttribute("aria-expanded", "false");
-      });
-
-      panelInner.appendChild(item);
-    });
+    buildOptions(selectEl, panelInner);
 
     // Sincronizar texto e estado ativo
     if (selectEl._csSync) selectEl._csSync();

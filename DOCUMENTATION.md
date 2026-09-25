@@ -42,3 +42,13 @@ Este documento registra as implementações, correções e padronizações visua
 ### Observação Técnica (Cache do Navegador)
 *Ao atualizar extensivamente os arquivos `.js` e `.css`, os navegadores tendem a utilizar versões em cache para economizar memória (especialmente com uso de Live Server local).*
 *Na última atualização, para forçar o navegador a descartar a UI antiga do Flatpickr (que exibia a caixa com hover azul sem cantos arredondados), introduzimos o parâmetro de cache-busting `?v=1.0.5` dentro do `<head>` do arquivo `index.html`.*
+---
+
+## 5. Revisão de qualidade e correções (setembro/2026)
+- **Sincronização (`auth_v2.js`):** toda gravação na nuvem passa por uma fila persistida no `localStorage` (`bible_sync_outbox`). Alterações feitas sem conexão são reenviadas em ordem e sempre antes de baixar dados da nuvem. O download pagina além do limite de 1000 linhas do Supabase e só altera o estado local se tudo for baixado com sucesso. A sincronização completa roda uma vez por login (não a cada renovação de token).
+- **Segurança:** textos do usuário (notas, nome, mensagens) nunca são inseridos como HTML. Scripts do CDN têm versão fixa e hash SRI (atualize a versão e o hash juntos). A tabela `user_approvals` foi removida (`supabase/security_fixes.sql`).
+- **NTLH (`data/NTLH.js`):** 2 Samuel corrigido (24 capítulos, 23:24-39 e 24:25 restaurados). Versículos agrupados (ex.: "[9-10]") guardam o texto só no primeiro versículo do grupo; o leitor exibe o rótulo "9-10".
+- **Planos de leitura:** fonte única em `reading_plans.js`. O plano de 1 ano cobre os 1189 capítulos. Para atualizar o catálogo no Supabase: `node scripts/generate_plans_sql.js` e executar `supabase/reading_plans_catalog.sql`.
+- **PWA offline (`sw.js`):** arquivos do site com rede primeiro e cache como reserva; traduções, bibliotecas do CDN e fontes com cache primeiro. Ao alterar arquivos de `data/`, incremente `DATA_CACHE` no `sw.js`.
+- **Links diretos:** `?livro=jo&cap=3&v=16` abre o capítulo e rola até o versículo; o compartilhamento usa esse formato.
+- **Organização:** SQL em `supabase/`, scripts em `scripts/`. `biblias-main/` (fonte das traduções) não é mais versionado. `_config.yml` impede a publicação de SQL, scripts e documentação no GitHub Pages.

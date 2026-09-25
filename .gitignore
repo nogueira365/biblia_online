@@ -1,0 +1,11 @@
+# Fonte original das traduções (pacote R, ~150 MB). Fica só na máquina local;
+# os dados usados pelo site estão em data/.
+biblias-main/
+
+# Pacotes de deploy e arquivos compactados
+*.zip
+
+# Dependências e arquivos do sistema
+node_modules/
+.DS_Store
+Thumbs.db

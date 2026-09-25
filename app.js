@@ -9,7 +9,6 @@ const state = {
   fontSize: "md",          // sm, md, lg, xl
   fontFamily: "serif",     // serif, sans
   theme: "azul",           // azul, claro, sepia, noturno
-  apiToken: "",            // Token do usuário para a API
   highlights: {},          // { "book-chapter-verse": "hl-color" }
   notes: {},               // { "book-chapter-verse": "texto da nota" }
   favorites: [],           // [ "book-chapter-verse", ... ]
@@ -46,14 +45,25 @@ document.addEventListener("DOMContentLoaded", () => {
   initUI();
   // Inicializa os dropdowns customizados (substitui <select> nativos)
   if (typeof initCustomSelects === "function") initCustomSelects();
-  loadActiveChapter();
+  const deepLinkVerse = applyDeepLinkFromUrl();
+  loadActiveChapter().then(() => {
+    if (deepLinkVerse) setTimeout(() => scrollToVerse(deepLinkVerse), 300);
+  });
 
   // Landing Page — Botão "Começar a Ler"
   const btnEnterApp = document.getElementById("btn-enter-app");
   if (btnEnterApp) {
-    btnEnterApp.addEventListener("click", () => {
+    btnEnterApp.addEventListener("click", async () => {
+      // Aguarda a sessão salva ser restaurada, para não pedir login a quem já está logado
+      if (window.authReady) {
+        await Promise.race([window.authReady, new Promise(resolve => setTimeout(resolve, 3000))]);
+      }
+
+      // Sem Supabase (não configurado, CDN indisponível ou offline) o app funciona em modo local
+      const cloudAvailable = typeof supabase !== "undefined" && !!supabase;
+
       // Verifica se o usuário está logado
-      if (typeof syncState !== "undefined" && !syncState.isLoggedIn) {
+      if (cloudAvailable && typeof syncState !== "undefined" && !syncState.isLoggedIn) {
         showToast("Por favor, crie uma conta ou faça login para continuar.", "error");
         
         // Abre o modal de autenticação (se a função existir globalmente ou clicando no botão)
@@ -85,6 +95,15 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// Elementos clicáveis que não são <button> (role="button"): Enter e Espaço acionam o clique
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const target = e.target;
+  if (!(target instanceof HTMLElement) || target.getAttribute("role") !== "button" || target.tagName === "BUTTON") return;
+  e.preventDefault();
+  target.click();
+});
+
 // Exibe a landing page novamente (ao clicar no home do breadcrumb)
 function showLandingPage() {
   const landingPage = document.getElementById("landing-page");
@@ -108,7 +127,6 @@ function loadStateFromLocalStorage() {
       state.fontSize = parsed.fontSize || "md";
       state.fontFamily = parsed.fontFamily || "serif";
       state.theme = parsed.theme || "azul";
-      state.apiToken = parsed.apiToken || "";
       state.highlights = parsed.highlights || {};
       state.notes = parsed.notes || {};
       state.favorites = parsed.favorites || [];
@@ -200,6 +218,12 @@ window.isVerseRead = function(verseKey) {
   return false;
 };
 
+// Chaves dos versículos exibidos no leitor (versículos agrupados não têm elemento próprio,
+// então a numeração não é necessariamente contínua)
+function getRenderedVerseKeys() {
+  return [...document.querySelectorAll(".verse-item")].map(el => el.getAttribute("data-verse-key"));
+}
+
 window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
   const parts = verseKey.split("-");
   const currentBook = parts[0];
@@ -225,10 +249,8 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
       }
       
       // Agora marcar todos os outros versículos como lidos individualmente
-      const totalVerses = document.querySelectorAll('.verse-item').length;
       const newlyReadVerses = [];
-      for(let i=1; i<=totalVerses; i++) {
-        const vk = `${currentBook}-${currentChapter}-${i}`;
+      for (const vk of getRenderedVerseKeys()) {
         if (vk !== verseKey && !state.readStatus.verses.includes(vk)) {
           state.readStatus.verses.push(vk);
           newlyReadVerses.push(vk);
@@ -258,14 +280,7 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
   saveStateToLocalStorage();
   
   // Check se todos os versículos do capítulo foram lidos agora
-  const totalVerses = document.querySelectorAll('.verse-item').length;
-  let allRead = true;
-  for(let i=1; i<=totalVerses; i++) {
-    if (!window.isVerseRead(`${currentBook}-${currentChapter}-${i}`)) {
-      allRead = false;
-      break;
-    }
-  }
+  const allRead = getRenderedVerseKeys().every(vk => window.isVerseRead(vk));
   if (allRead && !window.isChapterRead(currentBook, currentChapter)) {
     state.readStatus.chapters.push(`${currentBook}-${currentChapter}`);
     if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(`${currentBook}-${currentChapter}`, true);
@@ -304,12 +319,6 @@ function updateSettingsButtonsUI() {
   document.querySelectorAll(".size-btn").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-size-opt") === state.fontSize);
   });
-
-  // Token Input
-  const tokenInput = document.getElementById("token-input");
-  if (tokenInput) {
-    tokenInput.value = state.apiToken;
-  }
 }
 
 // Inicializa os elementos da interface e escuta eventos
@@ -375,15 +384,6 @@ function initUI() {
     });
   });
 
-  // Salvamento do token de API
-  const tokenInput = document.getElementById("token-input");
-  if (tokenInput) {
-    tokenInput.addEventListener("input", (e) => {
-      state.apiToken = e.target.value.trim();
-      saveStateToLocalStorage();
-    });
-  }
-
   // Filtro de Busca de Livros
   const searchBookInput = document.getElementById("search-book-input");
   if (searchBookInput) {
@@ -446,11 +446,7 @@ function initUI() {
       planSelect.value = state.readingPlans.activePlanId;
       if (typeof syncCustomSelect === "function") syncCustomSelect(planSelect);
     }
-    planSelect.addEventListener("change", (e) => {
-      state.readingPlans.activePlanId = e.target.value;
-      saveStateToLocalStorage();
-      renderReadingPlan();
-    });
+    // O evento "change" é tratado no DOMContentLoaded junto de populatePlanSelect()
   }
 
 
@@ -484,7 +480,8 @@ function initUI() {
         const bookData    = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
         const refText     = `${bookData ? bookData.name : state.currentBook} ${state.currentChapter}:${verseNum}`;
         const verseText   = verseTextEl ? verseTextEl.textContent : "";
-        shareVerse(verseText, refText, state.currentTranslation.toUpperCase());
+        shareVerse(verseText, refText, state.currentTranslation.toUpperCase(),
+          buildShareUrl(state.currentBook, state.currentChapter, verseNum));
       }
     }
   });
@@ -508,13 +505,31 @@ function initUI() {
   const btnMarkBookRead = document.getElementById("btn-mark-book-read");
   if (btnMarkBookRead) {
     btnMarkBookRead.addEventListener("click", () => {
-      const chapterKey = `${state.currentBook}-${state.currentChapter}`;
-      const index = state.readStatus.chapters.indexOf(chapterKey);
-      
-      if (index > -1) {
-        state.readStatus.chapters.splice(index, 1);
+      const bookKey = state.currentBook;
+      const chapterKey = `${bookKey}-${state.currentChapter}`;
+
+      if (window.isChapterRead(bookKey, state.currentChapter)) {
+        // Se o livro inteiro estava marcado, ele deixa de estar lido,
+        // mas os demais capítulos continuam marcados individualmente
+        const bookIndex = state.readStatus.books.indexOf(bookKey);
+        if (bookIndex > -1) {
+          state.readStatus.books.splice(bookIndex, 1);
+          const bookData = BIBLE_BOOKS.find(b => b.abbrev === bookKey);
+          const otherChapters = [];
+          for (let i = 1; i <= (bookData ? bookData.chapters : 0); i++) {
+            if (i !== state.currentChapter) otherChapters.push(`${bookKey}-${i}`);
+          }
+          state.readStatus.chapters = state.readStatus.chapters
+            .filter(chap => !chap.startsWith(`${bookKey}-`))
+            .concat(otherChapters);
+          // A fila preserva a ordem: remove o livro (e seus capítulos) e depois grava os demais
+          if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(bookKey, false);
+          if (typeof cloudSaveReadChapters === "function") cloudSaveReadChapters(otherChapters);
+        } else {
+          state.readStatus.chapters = state.readStatus.chapters.filter(chap => chap !== chapterKey);
+          if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(chapterKey, false);
+        }
         showToast("Capítulo marcado como não lido.", "success");
-        if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(chapterKey, false);
       } else {
         state.readStatus.chapters.push(chapterKey);
         showToast("Capítulo marcado como lido!", "success");
@@ -579,7 +594,7 @@ function initUI() {
       const sidebar = document.querySelector(".sidebar-pane");
       sidebar.classList.toggle("open");
       const overlay = document.getElementById("overlay");
-      overlay.style.display = sidebar.classList.contains("open") ? "block" : "none";
+      overlay.classList.toggle("active", sidebar.classList.contains("open"));
     });
   }
 
@@ -590,7 +605,7 @@ function initUI() {
       const sidebar = document.querySelector(".sidebar-pane");
       sidebar.classList.toggle("open");
       const overlay = document.getElementById("overlay");
-      overlay.style.display = sidebar.classList.contains("open") ? "block" : "none";
+      overlay.classList.toggle("active", sidebar.classList.contains("open"));
     });
   }
 
@@ -599,7 +614,7 @@ function initUI() {
     const sidebar = document.querySelector(".sidebar-pane");
     if (sidebar.classList.contains("open")) {
       sidebar.classList.remove("open");
-      document.getElementById("overlay").style.display = "none";
+      document.getElementById("overlay").classList.remove("active");
     }
     
     // Fechar menu de ações do topo
@@ -645,9 +660,6 @@ function initUI() {
           container.classList.remove("vod-dismissing");
         }, 360);
       }
-      // Salva que o usuário fechou hoje para não exibir novamente
-      const today = new Date().toISOString().split("T")[0];
-      localStorage.setItem("vod_dismissed_date", today);
     });
   }
 
@@ -663,21 +675,7 @@ function initUI() {
       saveStateToLocalStorage();
 
       loadActiveChapter().then(() => {
-        setTimeout(() => {
-          const verseNum = parseInt(container.dataset.verseNum);
-          const verseEl = document.querySelector(`.verse-item[data-verse-number="${verseNum}"]`);
-          const readerPane = document.getElementById("reader-pane");
-          const stickyHeader = document.querySelector(".reader-header-sticky");
-          if (verseEl && readerPane) {
-            const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 100;
-            const elementRect = verseEl.getBoundingClientRect();
-            const paneRect = readerPane.getBoundingClientRect();
-            const relativeTop = elementRect.top - paneRect.top + readerPane.scrollTop;
-            readerPane.scrollTo({ top: relativeTop - headerHeight - 12, behavior: "smooth" });
-            verseEl.style.backgroundColor = "var(--accent-muted)";
-            setTimeout(() => { verseEl.style.backgroundColor = ""; }, 2000);
-          }
-        }, 350);
+        setTimeout(() => scrollToVerse(parseInt(container.dataset.verseNum, 10)), 350);
       });
     });
   }
@@ -691,7 +689,8 @@ function initUI() {
         shareVerse(
           container.dataset.verseText,
           container.dataset.verseRef,
-          container.dataset.versionLabel
+          container.dataset.versionLabel,
+          buildShareUrl(container.dataset.verseBook, container.dataset.verseChapter, container.dataset.verseNum)
         );
       }
     });
@@ -726,7 +725,6 @@ function closeAllDrawers() {
   // Se estiver no mobile, também fecha o sidebar
   if (window.innerWidth <= 768) {
     document.querySelector(".sidebar-pane").classList.remove("open");
-    document.getElementById("overlay").style.display = "none";
   }
 }
 
@@ -741,10 +739,12 @@ function openDrawer(drawerId) {
 function showToast(message, type = "success") {
   const toast = document.getElementById("toast");
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `
-    <span>${type === 'success' ? '✓' : '⚠'}</span>
-    <span>${message}</span>
-  `;
+  // textContent: a mensagem pode conter texto vindo do servidor ou do usuário
+  const icon = document.createElement("span");
+  icon.textContent = type === "success" ? "✓" : "⚠";
+  const text = document.createElement("span");
+  text.textContent = message;
+  toast.replaceChildren(icon, text);
   toast.classList.add("show");
 
   setTimeout(() => {
@@ -787,6 +787,8 @@ function renderBooksList(filter = "") {
       const isBookRead = window.isBookRead(book.abbrev);
       const bookEl = document.createElement("div");
       bookEl.className = `book-item ${book.abbrev === state.currentBook ? "active" : ""}`;
+      bookEl.setAttribute("role", "button");
+      bookEl.setAttribute("tabindex", "0");
       bookEl.innerHTML = `
         <span style="display: flex; align-items: center; gap: 6px;">
           ${book.name}
@@ -846,15 +848,52 @@ function renderChaptersGrid() {
       // No mobile, fecha o sidebar ao selecionar
       if (window.innerWidth <= 768) {
         document.querySelector(".sidebar-pane").classList.remove("open");
-        document.getElementById("overlay").style.display = "none";
+        document.getElementById("overlay").classList.remove("active");
       }
     });
     grid.appendChild(btn);
   }
 }
 
+// Versículos agrupados (ex.: "[9-10] texto" na NTLH): o texto fica no primeiro versículo
+// do intervalo e os demais vêm vazios nos dados.
+const VERSE_RANGE_PREFIX = /^\s*\[(\d+)[-–](\d+)\]\s*/;
+
+// Separa o rótulo do versículo ("9" ou "9-10") do texto sem o prefixo de intervalo
+function splitVerseRange(number, text) {
+  const match = VERSE_RANGE_PREFIX.exec(text);
+  if (!match || Number(match[1]) !== number) return { label: String(number), text };
+  return { label: `${match[1]}-${match[2]}`, text: text.slice(match[0].length) };
+}
+
+// Conteúdo (número + texto) de uma célula do modo comparação
+function comparisonCellHTML(verse) {
+  if (verse.text === null) {
+    return `<span class="verse-number">${verse.number}</span><span class="verse-text verse-text-muted">—</span>`;
+  }
+  if (verse.text === "") {
+    return `<span class="verse-number">${verse.number}</span><span class="verse-text verse-text-muted">(agrupado ao versículo anterior)</span>`;
+  }
+  const { label, text } = splitVerseRange(verse.number, verse.text);
+  return `<span class="verse-number">${label}</span><span class="verse-text">${escapeHTML(text)}</span>`;
+}
+
+// Texto de um versículo nos dados da tradução; se ele faz parte de um grupo, devolve o texto do grupo
+function getVerseTextFromData(bibleData, bookIndex, chapterNum, verseNum) {
+  const book = bibleData[bookIndex];
+  const chapter = book && book.chapters[chapterNum - 1];
+  if (!chapter) return null;
+  for (let i = verseNum - 1; i >= 0; i--) {
+    if (chapter[i]) return chapter[i];
+    if (chapter[i] === undefined) return null;
+  }
+  return null;
+}
+
 // Cache das traduções em memória para evitar fetches repetidos
 const translationCache = {};
+// Carregamentos em andamento, por tradução
+const translationLoading = {};
 
 // Garante que a tradução está carregada na memória (compatível com protocolo file://)
 async function ensureTranslationLoaded(version) {
@@ -870,25 +909,35 @@ async function ensureTranslationLoaded(version) {
     return translationCache[v];
   }
   
+  // Se a tradução já está sendo baixada, reaproveita o mesmo carregamento (arquivos de ~4 MB)
+  if (translationLoading[v]) {
+    return translationLoading[v];
+  }
+
   // Carrega dinamicamente o arquivo JS correspondente à versão (evita bloqueios de CORS no file://)
-  await new Promise((resolve, reject) => {
+  translationLoading[v] = new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = `./data/${v.toUpperCase()}.js`;
     script.onload = () => {
       if (window[globalVarName]) {
         translationCache[v] = window[globalVarName];
-        resolve();
+        resolve(translationCache[v]);
       } else {
         reject(new Error(`Dados globais ${globalVarName} não encontrados.`));
       }
     };
-    script.onerror = (err) => {
+    script.onerror = () => {
+      script.remove(); // permite nova tentativa
       reject(new Error(`Não foi possível carregar a tradução ${v.toUpperCase()}.`));
     };
     document.head.appendChild(script);
   });
-  
-  return translationCache[v];
+
+  try {
+    return await translationLoading[v];
+  } finally {
+    delete translationLoading[v];
+  }
 }
 
 // Função para buscar capítulo localmente no JSON da tradução ativa
@@ -932,8 +981,13 @@ async function getChapterData(version, abbrev, chapter) {
   };
 }
 
+// Contador de renderizações: uma chamada mais nova invalida as anteriores ainda em andamento
+let chapterRenderSeq = 0;
+
 // Carrega o capítulo selecionado e renderiza na tela
 async function loadActiveChapter() {
+  const renderId = ++chapterRenderSeq;
+  const isStale = () => renderId !== chapterRenderSeq;
   const readerPane = document.getElementById("reader-pane");
   const versesContainer = document.getElementById("verses-container");
   
@@ -971,7 +1025,8 @@ async function loadActiveChapter() {
 
     // Carregar a tradução principal
     const data = await getChapterData(state.currentTranslation, state.currentBook, state.currentChapter);
-    
+    if (isStale()) return;
+
     // Atualizar título do capítulo e botão de marcar lido
     const chapterTitleEl = document.getElementById("chapter-title");
     const versionLabel = state.currentTranslation.toUpperCase();
@@ -1035,6 +1090,7 @@ async function loadActiveChapter() {
     if (state.comparisonActive) {
       // Carregar a tradução secundária para comparação
       const compData = await getChapterData(state.comparisonTranslation, state.currentBook, state.currentChapter);
+      if (isStale()) return;
       
       // Renderizar o cabeçalho da comparação
       const headerDiv = document.createElement("div");
@@ -1076,8 +1132,9 @@ async function loadActiveChapter() {
       // Combinar os versículos
       const totalVerses = Math.max(data.verses.length, compData.verses.length);
       for (let i = 0; i < totalVerses; i++) {
-        const vPrimary = data.verses[i] || { number: i + 1, text: "" };
-        const vSecondary = compData.verses[i] || { number: i + 1, text: "" };
+        // text null = a tradução não tem este versículo; "" = versículo agrupado ao anterior
+        const vPrimary = data.verses[i] || { number: i + 1, text: null };
+        const vSecondary = compData.verses[i] || { number: i + 1, text: null };
         
         const rowDiv = document.createElement("div");
         rowDiv.className = "comparison-row";
@@ -1091,10 +1148,7 @@ async function loadActiveChapter() {
         primaryCol.className = `verse-item primary-col ${hlPrimary} ${notePrimary}`;
         primaryCol.setAttribute("data-verse-number", vPrimary.number);
         primaryCol.setAttribute("data-verse-key", keyPrimary);
-        primaryCol.innerHTML = `
-          <span class="verse-number">${vPrimary.number}</span>
-          <span class="verse-text">${escapeHTML(vPrimary.text)}</span>
-        `;
+        primaryCol.innerHTML = comparisonCellHTML(vPrimary);
         if (state.notes[keyPrimary]) {
           addNoteButtonToVerse(primaryCol, keyPrimary);
         }
@@ -1113,10 +1167,7 @@ async function loadActiveChapter() {
         secondaryCol.className = `verse-item secondary-col ${hlSecondary} ${noteSecondary}`;
         secondaryCol.setAttribute("data-verse-number", vSecondary.number);
         secondaryCol.setAttribute("data-verse-key", keySecondary);
-        secondaryCol.innerHTML = `
-          <span class="verse-number">${vSecondary.number}</span>
-          <span class="verse-text">${escapeHTML(vSecondary.text)}</span>
-        `;
+        secondaryCol.innerHTML = comparisonCellHTML(vSecondary);
         if (state.notes[keySecondary]) {
           addNoteButtonToVerse(secondaryCol, keySecondary);
         }
@@ -1133,6 +1184,9 @@ async function loadActiveChapter() {
     } else {
       // Renderizar versículos normalmente
       data.verses.forEach(v => {
+        // Versículo agrupado: o texto já aparece no primeiro versículo do grupo
+        if (!v.text) return;
+        const { label: verseLabel, text: verseText } = splitVerseRange(v.number, v.text);
         const verseKey = `${state.currentBook}-${state.currentChapter}-${v.number}`;
         const highlightClass = state.highlights[verseKey] || "";
         const hasNote = state.notes[verseKey] ? "has-note" : "";
@@ -1145,9 +1199,9 @@ async function loadActiveChapter() {
         
         verseDiv.innerHTML = `
           <input type="checkbox" class="verse-read-checkbox" ${window.isVerseRead(verseKey) ? 'checked' : ''} title="Marcar como lido" style="margin-right: 6px; cursor: pointer; accent-color: var(--accent-color);">
-          <span class="verse-number">${v.number}</span>
-          <span class="verse-text">${escapeHTML(v.text)}</span>
-          <button class="btn-share-verse-inline" data-verse-key="${verseKey}" title="Compartilhar versículo ${v.number}" aria-label="Compartilhar versículo ${v.number}">
+          <span class="verse-number">${verseLabel}</span>
+          <span class="verse-text">${escapeHTML(verseText)}</span>
+          <button class="btn-share-verse-inline" data-verse-key="${verseKey}" title="Compartilhar versículo ${verseLabel}" aria-label="Compartilhar versículo ${verseLabel}">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
             </svg>
@@ -1194,6 +1248,7 @@ async function loadActiveChapter() {
     updateBottomNavigationUI();
 
   } catch (error) {
+    if (isStale()) return; // uma navegação mais nova já assumiu a tela
     console.error("Erro ao carregar capítulo:", error);
     showToast("Erro ao carregar os dados locais do capítulo.", "error");
 
@@ -1209,6 +1264,59 @@ async function loadActiveChapter() {
   }
 }
 
+// Rola o leitor até o versículo e o destaca por alguns segundos
+function scrollToVerse(verseNum) {
+  const readerPane = document.getElementById("reader-pane");
+  if (!readerPane || !verseNum) return;
+  // Versículo agrupado não tem elemento próprio: usa o do início do grupo
+  const verseEl = [...document.querySelectorAll(".verse-item:not(.secondary-col)")]
+    .filter(el => Number(el.getAttribute("data-verse-number")) <= verseNum)
+    .pop();
+  if (!verseEl) return;
+
+  const stickyHeader = document.querySelector(".reader-header-sticky");
+  const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 100;
+  const relativeTop = verseEl.getBoundingClientRect().top - readerPane.getBoundingClientRect().top + readerPane.scrollTop;
+  readerPane.scrollTo({ top: relativeTop - headerHeight - 12, behavior: "smooth" });
+
+  // Animação rápida de piscar
+  verseEl.style.backgroundColor = "var(--accent-muted)";
+  setTimeout(() => { verseEl.style.backgroundColor = ""; }, 2000);
+}
+
+// Parâmetros de link direto: ?livro=jo&cap=3&v=16
+const DEEP_LINK_PARAMS = ["livro", "cap", "v"];
+
+// Aplica um link direto da URL ao estado e limpa os parâmetros. Retorna o versículo pedido, se houver.
+function applyDeepLinkFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (!DEEP_LINK_PARAMS.some(key => params.has(key))) return null;
+
+  const bookData = BIBLE_BOOKS.find(b => b.abbrev === (params.get("livro") || "").toLowerCase());
+  const chapter = parseInt(params.get("cap"), 10);
+  const verse = parseInt(params.get("v"), 10);
+  let targetVerse = null;
+  if (bookData) {
+    state.currentBook = bookData.abbrev;
+    state.currentChapter = chapter >= 1 && chapter <= bookData.chapters ? chapter : 1;
+    saveStateToLocalStorage();
+    if (verse > 0) targetVerse = verse;
+  }
+
+  // Remove só os parâmetros do link (os do login do Supabase, se houver, são preservados)
+  DEEP_LINK_PARAMS.forEach(key => params.delete(key));
+  const query = params.toString();
+  window.history.replaceState(null, document.title, window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+  return targetVerse;
+}
+
+// Monta o link direto para um capítulo ou versículo
+function buildShareUrl(book, chapter, verse) {
+  const params = new URLSearchParams({ livro: book, cap: String(chapter) });
+  if (verse) params.set("v", String(verse));
+  return `${window.location.origin}${window.location.pathname}?${params}`;
+}
+
 // Navegar para um capítulo offline predefinido
 window.navigateOffline = function(book, chapter) {
   state.currentBook = book;
@@ -1219,6 +1327,10 @@ window.navigateOffline = function(book, chapter) {
 
 // Histórico de Leitura
 function addToHistory(bookName, chapter) {
+  // Re-renderizar o mesmo capítulo (tema, marcação de leitura, sincronização) não é uma nova leitura
+  const latest = state.history[0];
+  if (latest && latest.book === state.currentBook && latest.chapter === chapter) return;
+
   // Remover duplicações recentes do mesmo capítulo
   state.history = state.history.filter(h => !(h.book === state.currentBook && h.chapter === chapter));
   
@@ -1339,6 +1451,13 @@ function navigateNextChapter() {
 // Menu Flutuante de Versículo (Destaques, notas, favoritos)
 function initVerseContextMenu() {
   const menu = document.getElementById("verse-menu");
+
+  // Bolinhas de cor acessíveis pelo teclado
+  menu.querySelectorAll(".color-dot").forEach(dot => {
+    dot.setAttribute("role", "button");
+    dot.setAttribute("tabindex", "0");
+    dot.setAttribute("aria-label", dot.getAttribute("title") || "Cor");
+  });
 
   // Esconder menu ao clicar fora
   document.addEventListener("click", () => {
@@ -1463,7 +1582,8 @@ function initVerseContextMenu() {
     if (verseEl) {
       const verseText = verseEl.querySelector(".verse-text").textContent;
       const refText = getVerseReferenceText(state.activeVerseKey);
-      await shareVerse(verseText, refText, state.currentTranslation.toUpperCase());
+      const [book, chapter, verse] = state.activeVerseKey.split("-");
+      await shareVerse(verseText, refText, state.currentTranslation.toUpperCase(), buildShareUrl(book, chapter, verse));
     }
     menu.style.display = "none";
   });
@@ -1590,27 +1710,33 @@ async function openNoteEditor(verseKey) {
 
   // Criar e abrir um container customizado ou usar modal/anotações
   openDrawer("favorites-drawer"); // focar na drawer de favoritos/anotações
+  await renderFavoritesAndNotes(); // lista atualizada abaixo do editor
 
   const listContainer = document.getElementById("annotations-container");
   
-  // Guardar HTML atual
-  const oldHTML = listContainer.innerHTML;
+  // Remover um editor anterior que ainda esteja aberto
+  const previousEditor = document.getElementById("note-editor-card");
+  if (previousEditor) previousEditor.remove();
 
-  // Renderizar o formulário temporário no topo da drawer
-  listContainer.innerHTML = `
-    <div style="background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-      <div style="font-size: 13px; font-weight: 700; color: var(--accent-color); margin-bottom: 6px;">Anotação para ${refText}</div>
-      <div style="font-size: 12px; color: var(--text-secondary); font-style: italic; margin-bottom: 12px;">"${textVal}"</div>
-      <div class="note-editor-container">
-        <textarea id="note-textarea-input" class="note-textarea" placeholder="Escreva seus pensamentos e revelações sobre este versículo...">${state.notes[verseKey] || ""}</textarea>
-        <div class="btn-group">
-          <button id="note-btn-cancel" class="btn-secondary">Cancelar</button>
-          <button id="note-btn-save" class="btn-primary">Salvar Nota</button>
-        </div>
+  // Renderizar o formulário temporário no topo da drawer, sem recriar a lista
+  // (recriar via innerHTML apagaria os eventos dos cards abaixo)
+  const editorCard = document.createElement("div");
+  editorCard.id = "note-editor-card";
+  editorCard.style.cssText = "background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; margin-bottom: 20px;";
+  editorCard.innerHTML = `
+    <div style="font-size: 13px; font-weight: 700; color: var(--accent-color); margin-bottom: 6px;">Anotação para ${escapeHTML(refText)}</div>
+    <div style="font-size: 12px; color: var(--text-secondary); font-style: italic; margin-bottom: 12px;">"${escapeHTML(textVal)}"</div>
+    <div class="note-editor-container">
+      <textarea id="note-textarea-input" class="note-textarea" placeholder="Escreva seus pensamentos e revelações sobre este versículo..."></textarea>
+      <div class="btn-group">
+        <button id="note-btn-cancel" class="btn-secondary">Cancelar</button>
+        <button id="note-btn-save" class="btn-primary">Salvar Nota</button>
       </div>
     </div>
-    ${oldHTML}
   `;
+  // A nota entra via .value para nunca ser interpretada como HTML
+  editorCard.querySelector("#note-textarea-input").value = state.notes[verseKey] || "";
+  listContainer.prepend(editorCard);
 
   // Ouvintes de evento do editor de nota
   document.getElementById("note-btn-cancel").addEventListener("click", () => {
@@ -1671,11 +1797,9 @@ async function getVerseTextLocal(verseKey) {
     }
     
     const bookIndex = BIBLE_BOOKS.findIndex(b => b.abbrev.toLowerCase() === bookAbbrev.toLowerCase());
-    if (bookIndex !== -1 && bibleData[bookIndex]) {
-      const chapters = bibleData[bookIndex].chapters;
-      if (chapters[chapterNum - 1] && chapters[chapterNum - 1][verseNum - 1]) {
-        return chapters[chapterNum - 1][verseNum - 1];
-      }
+    if (bookIndex !== -1) {
+      const text = getVerseTextFromData(bibleData, bookIndex, chapterNum, verseNum);
+      if (text) return text;
     }
   } catch (e) {
     console.error("Erro ao obter texto do versículo local:", e);
@@ -1683,12 +1807,41 @@ async function getVerseTextLocal(verseKey) {
   return "Texto não encontrado offline.";
 }
 
+// Ordena chaves "livro-capítulo-versículo" na ordem canônica (livro, capítulo, versículo)
+function compareVerseKeys(a, b) {
+  const partsA = a.split("-");
+  const partsB = b.split("-");
+  
+  const indexA = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsA[0]);
+  const indexB = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsB[0]);
+  
+  if (indexA !== indexB) {
+    return indexA - indexB;
+  }
+  
+  const chapA = parseInt(partsA[1]);
+  const chapB = parseInt(partsB[1]);
+  if (chapA !== chapB) {
+    return chapA - chapB;
+  }
+  
+  const vA = parseInt(partsA[2]);
+  const vB = parseInt(partsB[2]);
+  return vA - vB;
+}
+
+// Contador de renderizações da lista de marcações (descarta renderizações obsoletas)
+let favoritesRenderSeq = 0;
+
 // Renderiza a lista de Favoritos, Destaques e Anotações na Drawer
 async function renderFavoritesAndNotes() {
   const container = document.getElementById("annotations-container");
   if (!container) return;
 
-  container.innerHTML = "";
+  // Chamadas concorrentes (ex.: digitação no filtro) não podem misturar seus cards:
+  // a lista é montada fora da tela e só a renderização mais recente é aplicada.
+  const renderId = ++favoritesRenderSeq;
+  const fragment = document.createDocumentFragment();
 
   // Reunir todas as chaves (highlights, notes, favorites)
   const allKeys = new Set([
@@ -1709,27 +1862,7 @@ async function renderFavoritesAndNotes() {
   }
 
   // Ordenar chaves por Livro (ordem canônica), Capítulo e Versículo
-  const sortedKeys = Array.from(allKeys).sort((a, b) => {
-    const partsA = a.split("-");
-    const partsB = b.split("-");
-    
-    const indexA = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsA[0]);
-    const indexB = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsB[0]);
-    
-    if (indexA !== indexB) {
-      return indexA - indexB;
-    }
-    
-    const chapA = parseInt(partsA[1]);
-    const chapB = parseInt(partsB[1]);
-    if (chapA !== chapB) {
-      return chapA - chapB;
-    }
-    
-    const vA = parseInt(partsA[2]);
-    const vB = parseInt(partsB[2]);
-    return vA - vB;
-  });
+  const sortedKeys = Array.from(allKeys).sort(compareVerseKeys);
 
   const searchInput = document.getElementById("search-notes-input");
   
@@ -1757,6 +1890,7 @@ async function renderFavoritesAndNotes() {
 
     // Obter o texto real do versículo de forma síncrona/assíncrona offline
     const verseText = await getVerseTextLocal(verseKey);
+    if (renderId !== favoritesRenderSeq) return;
     const refText = getVerseReferenceText(verseKey);
 
     // Filtrar se houver termo de busca e não for um filtro por versículo específico
@@ -1789,7 +1923,7 @@ async function renderFavoritesAndNotes() {
 
     card.innerHTML = `
       <div class="annotation-verse-ref">
-        ${refText} ${isFav ? '❤️' : ''}
+        ${escapeHTML(refText)} ${isFav ? '❤️' : ''}
       </div>
       <div class="annotation-text">"${escapeHTML(verseText)}"</div>
       ${noteText ? `<div class="annotation-note"><strong>Nota:</strong> ${escapeHTML(noteText)}</div>` : ""}
@@ -1818,27 +1952,7 @@ async function renderFavoritesAndNotes() {
       saveStateToLocalStorage();
       
       loadActiveChapter().then(() => {
-        setTimeout(() => {
-          const verseEl = document.querySelector(`.verse-item[data-verse-number="${verseNum}"]`);
-          const readerPane = document.getElementById("reader-pane");
-          const stickyHeader = document.querySelector(".reader-header-sticky");
-          if (verseEl && readerPane) {
-            const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 100;
-            const elementRect = verseEl.getBoundingClientRect();
-            const paneRect = readerPane.getBoundingClientRect();
-            const relativeTop = elementRect.top - paneRect.top + readerPane.scrollTop;
-            const targetScrollTop = relativeTop - headerHeight - 12;
-            readerPane.scrollTo({
-              top: targetScrollTop,
-              behavior: "smooth"
-            });
-            // Adicionar uma animação rápida de piscar
-            verseEl.style.backgroundColor = "var(--accent-muted)";
-            setTimeout(() => {
-              verseEl.style.backgroundColor = "";
-            }, 2000);
-          }
-        }, 300);
+        setTimeout(() => scrollToVerse(verseNum), 300);
       });
       closeAllDrawers();
     });
@@ -1879,8 +1993,11 @@ async function renderFavoritesAndNotes() {
       }
     });
 
-    container.appendChild(card);
+    fragment.appendChild(card);
   }
+
+  if (renderId !== favoritesRenderSeq) return;
+  container.replaceChildren(fragment);
 
   if (filterVal && renderedCount === 0) {
     container.innerHTML = `
@@ -1914,7 +2031,7 @@ async function executeBibleSearch() {
     const bibleData = await ensureTranslationLoaded(state.currentTranslation);
     
     // Realizar busca nos versículos
-    const queryNorm = query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const queryNorm = normalizeForSearch(query);
     const foundVerses = [];
     
     bibleData.forEach((book, bookIdx) => {
@@ -1923,7 +2040,7 @@ async function executeBibleSearch() {
         const chapterNum = chapIdx + 1;
         chapter.forEach((verseText, verseIdx) => {
           const verseNum = verseIdx + 1;
-          const verseNorm = verseText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const verseNorm = normalizeForSearch(verseText);
           if (verseNorm.includes(queryNorm)) {
             foundVerses.push({
               book: { abbrev: bookMeta.abbrev, name: bookMeta.name },
@@ -1938,8 +2055,7 @@ async function executeBibleSearch() {
     
     const searchData = {
       occurrence: foundVerses.length,
-      verses: foundVerses,
-      isOffline: false
+      verses: foundVerses
     };
     
     renderSearchResults(searchData, query);
@@ -1964,7 +2080,6 @@ function renderSearchResults(data, query) {
     container.innerHTML = `
       <div style="text-align: center; padding: 30px 0; color: var(--text-muted);">
         Nenhum resultado encontrado para "${escapeHTML(query)}".
-        ${data.isOffline ? `<br/><br/><small style="color: var(--text-muted);">Nota: Apenas buscando nos capítulos carregados offline (Gênesis 1, Salmos 23, Provérbios 28, João 3) devido ao limite da API.</small>` : ""}
       </div>
     `;
     return;
@@ -1975,14 +2090,15 @@ function renderSearchResults(data, query) {
   countDiv.className = "search-count";
   countDiv.innerHTML = `
     Encontradas <strong>${data.occurrence}</strong> ocorrências para "${escapeHTML(query)}"
-    ${data.isOffline ? ` (Busca Offline Local)` : ""}
+    ${data.verses.length > MAX_SEARCH_RESULTS ? `<br><small>Exibindo as primeiras ${MAX_SEARCH_RESULTS}. Refine a busca para ver outras.</small>` : ""}
   `;
   container.appendChild(countDiv);
 
   const listDiv = document.createElement("div");
   listDiv.className = "search-results";
 
-  data.verses.forEach(v => {
+  // Renderizar dezenas de milhares de itens (ex.: busca por "a") trava a página
+  data.verses.slice(0, MAX_SEARCH_RESULTS).forEach(v => {
     const resultItem = document.createElement("div");
     resultItem.className = "search-result-item";
     
@@ -2003,27 +2119,7 @@ function renderSearchResults(data, query) {
       // Ao carregar, vamos focar no leitor
       loadActiveChapter().then(() => {
         // Tentar rolar para o versículo específico
-        setTimeout(() => {
-          const verseEl = document.querySelector(`.verse-item[data-verse-number="${v.number}"]`);
-          const readerPane = document.getElementById("reader-pane");
-          const stickyHeader = document.querySelector(".reader-header-sticky");
-          if (verseEl && readerPane) {
-            const headerHeight = stickyHeader ? stickyHeader.offsetHeight : 100;
-            const elementRect = verseEl.getBoundingClientRect();
-            const paneRect = readerPane.getBoundingClientRect();
-            const relativeTop = elementRect.top - paneRect.top + readerPane.scrollTop;
-            const targetScrollTop = relativeTop - headerHeight - 12;
-            readerPane.scrollTo({
-              top: targetScrollTop,
-              behavior: "smooth"
-            });
-            // Adicionar uma animação rápida de piscar
-            verseEl.style.backgroundColor = "var(--accent-muted)";
-            setTimeout(() => {
-              verseEl.style.backgroundColor = "";
-            }, 2000);
-          }
-        }, 300);
+        setTimeout(() => scrollToVerse(v.number), 300);
       });
 
       closeAllDrawers();
@@ -2036,23 +2132,47 @@ function renderSearchResults(data, query) {
 }
 
 // Coloca tags de mark no termo buscado
+// Ignora maiúsculas e acentos, como a própria busca ("fe" realça "Fé")
 function highlightSearchText(text, query) {
-  if (!query) return escapeHTML(text);
-  
-  // Escapar caracteres especiais da regex
-  const escapedQuery = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-  
-  try {
-    const regex = new RegExp(`(${escapedQuery})`, 'gi');
-    return escapeHTML(text).replace(regex, '<mark>$1</mark>');
-  } catch (e) {
-    return escapeHTML(text);
+  const queryNorm = normalizeForSearch(query || "");
+  if (!queryNorm) return escapeHTML(text);
+
+  // Normaliza caractere a caractere, guardando a posição original de cada caractere normalizado
+  let textNorm = "";
+  const originalIndex = [];
+  for (let i = 0; i < text.length; i++) {
+    const charNorm = normalizeForSearch(text[i]);
+    for (let k = 0; k < charNorm.length; k++) {
+      textNorm += charNorm[k];
+      originalIndex.push(i);
+    }
   }
+
+  let html = "";
+  let lastEnd = 0;
+  let from = 0;
+  let pos;
+  while ((pos = textNorm.indexOf(queryNorm, from)) !== -1) {
+    const start = originalIndex[pos];
+    const end = originalIndex[pos + queryNorm.length - 1] + 1;
+    html += escapeHTML(text.slice(lastEnd, start)) + "<mark>" + escapeHTML(text.slice(start, end)) + "</mark>";
+    lastEnd = end;
+    from = pos + queryNorm.length;
+  }
+  return html + escapeHTML(text.slice(lastEnd));
+}
+
+// Máximo de resultados exibidos na busca
+const MAX_SEARCH_RESULTS = 300;
+
+// Minúsculas e sem acentos, para comparar termos
+function normalizeForSearch(str) {
+  return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 // Utilitários de String
 function escapeHTML(str) {
-  return str
+  return String(str ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -2061,19 +2181,25 @@ function escapeHTML(str) {
 }
 
 // Exporta os destaques e notas de estudo do usuário no formato Markdown
-function exportNotesToMarkdown() {
+async function exportNotesToMarkdown() {
   // Verificar se existem marcações ou notas
-  const allKeys = new Set([
+  const allKeys = [...new Set([
     ...Object.keys(state.highlights),
     ...Object.keys(state.notes),
     ...state.favorites
-  ]);
-  
-  if (allKeys.size === 0) {
+  ])].sort(compareVerseKeys);
+
+  if (allKeys.length === 0) {
     showToast("Nenhuma anotação ou destaque encontrado para exportar.", "warning");
     return;
   }
-  
+
+  // Texto de cada versículo na tradução ativa (não só dos que estão abertos na tela)
+  const verseTexts = new Map();
+  for (const verseKey of allKeys) {
+    verseTexts.set(verseKey, await getVerseTextLocal(verseKey));
+  }
+
   let mdContent = `# Bíblia Live - Minhas Anotações e Estudos\n`;
   mdContent += `Exportado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
   mdContent += `---\n\n`;
@@ -2092,13 +2218,8 @@ function exportNotesToMarkdown() {
     const highlightColor = state.highlights[verseKey];
     const noteText = state.notes[verseKey];
     
-    // Tentar obter o texto do versículo a partir do DOM se ele estiver em exibição, senão apenas a ref
-    let verseText = "";
-    const activeVerseEl = document.querySelector(`.verse-item[data-verse-key="${verseKey}"]`);
-    if (activeVerseEl) {
-      verseText = activeVerseEl.querySelector(".verse-text").textContent;
-    }
-    
+    const verseText = verseTexts.get(verseKey) || "";
+
     let itemText = `### ${refText} ${isFav ? '❤️' : ''}\n`;
     if (verseText) {
       itemText += `*Texto:* *"${verseText}"*\n\n`;
@@ -2150,104 +2271,7 @@ function exportNotesToMarkdown() {
   showToast("Estudos exportados com sucesso em Markdown!", "success");
 }
 
-// Constante que define os Planos de Leitura
-window.READING_PLANS = {
-  gospels: {
-    name: "Evangelhos em 30 Dias",
-    description: "Leitura diária dos quatro Evangelhos (Mateus, Marcos, Lucas e João).",
-    days: [
-      { day: 1, label: "Mateus 1-3", book: "mt", chapter: 1 },
-      { day: 2, label: "Mateus 4-6", book: "mt", chapter: 4 },
-      { day: 3, label: "Mateus 7-9", book: "mt", chapter: 7 },
-      { day: 4, label: "Mateus 10-12", book: "mt", chapter: 10 },
-      { day: 5, label: "Mateus 13-15", book: "mt", chapter: 13 },
-      { day: 6, label: "Mateus 16-18", book: "mt", chapter: 16 },
-      { day: 7, label: "Mateus 19-21", book: "mt", chapter: 19 },
-      { day: 8, label: "Mateus 22-24", book: "mt", chapter: 22 },
-      { day: 9, label: "Mateus 25-26", book: "mt", chapter: 25 },
-      { day: 10, label: "Mateus 27-28", book: "mt", chapter: 27 },
-      { day: 11, label: "Marcos 1-3", book: "mc", chapter: 1 },
-      { day: 12, label: "Marcos 4-6", book: "mc", chapter: 4 },
-      { day: 13, label: "Marcos 7-9", book: "mc", chapter: 7 },
-      { day: 14, label: "Marcos 10-12", book: "mc", chapter: 10 },
-      { day: 15, label: "Marcos 13-16", book: "mc", chapter: 13 },
-      { day: 16, label: "Lucas 1-3", book: "lc", chapter: 1 },
-      { day: 17, label: "Lucas 4-6", book: "lc", chapter: 4 },
-      { day: 18, label: "Lucas 7-9", book: "lc", chapter: 7 },
-      { day: 19, label: "Lucas 10-12", book: "lc", chapter: 10 },
-      { day: 20, label: "Lucas 13-15", book: "lc", chapter: 13 },
-      { day: 21, label: "Lucas 16-18", book: "lc", chapter: 16 },
-      { day: 22, label: "Lucas 19-21", book: "lc", chapter: 19 },
-      { day: 23, label: "Lucas 22-24", book: "lc", chapter: 22 },
-      { day: 24, label: "João 1-3", book: "jo", chapter: 1 },
-      { day: 25, label: "João 4-6", book: "jo", chapter: 4 },
-      { day: 26, label: "João 7-9", book: "jo", chapter: 7 },
-      { day: 27, label: "João 10-12", book: "jo", chapter: 10 },
-      { day: 28, label: "João 13-15", book: "jo", chapter: 13 },
-      { day: 29, label: "João 16-18", book: "jo", chapter: 16 },
-      { day: 30, label: "João 19-21", book: "jo", chapter: 19 }
-    ]
-  },
-  proverbs: {
-    name: "Sabedoria (Provérbios em 31 Dias)",
-    description: "Leia um capítulo do Livro de Provérbios a cada dia do mês.",
-    days: Array.from({ length: 31 }, (_, i) => ({
-      day: i + 1,
-      label: `Provérbios ${i + 1}`,
-      book: "pv",
-      chapter: i + 1
-    }))
-  },
-  "conhecendo-jesus": {
-    name: "Conhecendo quem é Jesus",
-    description: "Uma jornada de 10 dias focada na pessoa e na obra de Cristo.",
-    days: [
-      { day: 1, label: "João 1", book: "jo", chapter: 1 },
-      { day: 2, label: "João 3", book: "jo", chapter: 3 },
-      { day: 3, label: "João 6", book: "jo", chapter: 6 },
-      { day: 4, label: "João 8", book: "jo", chapter: 8 },
-      { day: 5, label: "João 10", book: "jo", chapter: 10 },
-      { day: 6, label: "João 11", book: "jo", chapter: 11 },
-      { day: 7, label: "João 14", book: "jo", chapter: 14 },
-      { day: 8, label: "João 15", book: "jo", chapter: 15 },
-      { day: 9, label: "João 19", book: "jo", chapter: 19 },
-      { day: 10, label: "João 20", book: "jo", chapter: 20 }
-    ]
-  },
-  "paz-excede": {
-    name: "A paz que excede o entendimento",
-    description: "Um plano de 5 dias focado em como lidar com a ansiedade à luz da Bíblia.",
-    days: [
-      { day: 1, label: "Filipenses 4", book: "fp", chapter: 4 },
-      { day: 2, label: "Mateus 6", book: "mt", chapter: 6 },
-      { day: 3, label: "Salmos 23", book: "sl", chapter: 23 },
-      { day: 4, label: "Salmos 91", book: "sl", chapter: 91 },
-      { day: 5, label: "João 14", book: "jo", chapter: 14 }
-    ]
-  },
-  "caminho-da-volta": {
-    name: "O Caminho da Volta",
-    description: "Reflexões sobre experiências de retorno e transformação encontradas nas Escrituras (Plano SBB).",
-    days: [
-      { day: 1, label: "Lucas 5", book: "lc", chapter: 5 },
-      { day: 2, label: "Lucas 15", book: "lc", chapter: 15 },
-      { day: 3, label: "Jeremias 25", book: "jr", chapter: 25 },
-      { day: 4, label: "Gênesis 33", book: "gn", chapter: 33 },
-      { day: 5, label: "Atos 9", book: "at", chapter: 9 }
-    ]
-  },
-  "tempo-com-palavra": {
-    name: "Um tempo com a Palavra",
-    description: "Especialmente planejado para pais e filhos compartilharem momentos de leitura (Plano SBB).",
-    days: [
-      { day: 1, label: "Provérbios 22", book: "pv", chapter: 22 },
-      { day: 2, label: "Efésios 6", book: "ef", chapter: 6 },
-      { day: 3, label: "Salmos 127", book: "sl", chapter: 127 },
-      { day: 4, label: "Deuteronômio 6", book: "dt", chapter: 6 },
-      { day: 5, label: "Colossenses 3", book: "cl", chapter: 3 }
-    ]
-  }
-};
+// Os planos de leitura (window.READING_PLANS) são definidos em reading_plans.js
 
 // Renderiza a gaveta do plano de leitura
 function renderReadingPlan() {
@@ -2300,18 +2324,18 @@ function renderReadingPlan() {
     
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-        <input type="checkbox" id="check-${planId}-${d.day}" ${isCompleted ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color);">
-        <label for="check-${planId}-${d.day}" style="cursor: pointer; font-size: 14px; font-weight: 500; color: ${isCompleted ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${isCompleted ? 'line-through' : 'none'}; flex: 1;">
-          Dia ${d.day}: ${d.label}
+        <input type="checkbox" id="check-${escapeHTML(planId)}-${d.day}" ${isCompleted ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color);">
+        <label for="check-${escapeHTML(planId)}-${d.day}" style="cursor: pointer; font-size: 14px; font-weight: 500; color: ${isCompleted ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${isCompleted ? 'line-through' : 'none'}; flex: 1;">
+          Dia ${escapeHTML(d.day)}: ${escapeHTML(d.label)}
         </label>
       </div>
-      <button class="btn-go-reading" data-book="${d.book}" data-chapter="${d.chapter}" data-label="${d.label}">
+      <button class="btn-go-reading" data-book="${escapeHTML(d.book)}" data-chapter="${escapeHTML(d.chapter)}" data-label="${escapeHTML(d.label)}">
         Ler
       </button>
     `;
 
     // Evento do Checkbox
-    const checkbox = card.querySelector(`#check-${planId}-${d.day}`);
+    const checkbox = card.querySelector('input[type="checkbox"]');
     checkbox.addEventListener("change", (e) => {
       if (!state.readingPlans) {
         state.readingPlans = { activePlanId: planId, progress: {} };
@@ -2535,13 +2559,12 @@ async function renderVerseOfTheDay() {
       return;
     }
 
-    const chapterArr = bibleData[bookIndex].chapters[verseInfo.chapter - 1];
-    if (!chapterArr || !chapterArr[verseInfo.verse - 1]) {
+    const verseText = getVerseTextFromData(bibleData, bookIndex, verseInfo.chapter, verseInfo.verse);
+    if (!verseText) {
       container.style.display = "none";
       return;
     }
 
-    const verseText  = chapterArr[verseInfo.verse - 1];
     const refText    = `${bookMeta.name} ${verseInfo.chapter}:${verseInfo.verse}`;
     const versionLbl = state.currentTranslation.toUpperCase();
 
@@ -2590,10 +2613,9 @@ async function renderVerseOfTheDay() {
  * @param {string} refText   - Referência (ex: João 3:16)
  * @param {string} versionLbl - Sigla da tradução (ex: NVI)
  */
-async function shareVerse(verseText, refText, versionLbl) {
+async function shareVerse(verseText, refText, versionLbl, shareUrl = window.location.href) {
   const shareText  = `"${verseText}"\n— ${refText} (${versionLbl})`;
   const shareTitle = `Bíblia Live — ${refText}`;
-  const shareUrl   = window.location.href;
 
   if (navigator.share) {
     try {
@@ -2657,7 +2679,7 @@ async function shareChapter() {
 
   const shareTitle = `Bíblia Live — ${refText}`;
   const shareText  = `${refText}\n\n${versesText.trim()}`;
-  const shareUrl   = window.location.href;
+  const shareUrl   = buildShareUrl(state.currentBook, chapter);
 
   if (navigator.share) {
     try {

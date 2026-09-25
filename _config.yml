@@ -1,0 +1,8 @@
+# GitHub Pages: arquivos do repositório que NÃO devem ser publicados no site
+exclude:
+  - supabase/
+  - scripts/
+  - "*.md"
+  - package.json
+  - iniciar_servidor.bat
+  - .gitignore

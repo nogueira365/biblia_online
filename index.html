@@ -16,38 +16,41 @@
   <meta name="apple-mobile-web-app-title" content="Bíblia Live">
 
   <!-- Biblioteca CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt" crossorigin="anonymous">
   
   <!-- Estilos Customizados (carregados por último para ter precedência) -->
-  <link rel="stylesheet" href="styles_v7.css?v=14.0">
+  <link rel="stylesheet" href="styles_v7.css?v=16.0">
   
   <!-- Chaves e Configurações do Supabase -->
   <script src="config.js" defer></script>
   
-  <!-- SDK de Conexão com o Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <!-- SDK de Conexão com o Supabase (versão fixa + SRI: atualize a versão e o hash juntos) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js" integrity="sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok" crossorigin="anonymous" defer></script>
   
   <!-- Inicialização do Cliente Supabase -->
   <script src="supabase.js" defer></script>
   
   <!-- Flatpickr (Calendário Customizado) -->
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js" integrity="sha384-5JqMv4L/Xa0hfvtF06qboNdhvuYXUku9ZrhZh3bSk8VXF0A/RuSLHpLsSV9Zqhl6" crossorigin="anonymous" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/pt.js" integrity="sha384-agbVpcY312cNMSL1b3CUo060bj9FmbwUX8HUCNSE17+jOU/en4yz3w9ro9IWVusF" crossorigin="anonymous" defer></script>
   
   <!-- Lógica de Autenticação e Sincronização Supabase -->
-  <script src="auth_v2.js?v=16.0" defer></script>
+  <script src="auth_v2.js?v=18.0" defer></script>
   
   <!-- Script de Dados Offline e Configurações (Carrega primeiro) -->
-  <script src="offline_data.js" defer></script>
+  <script src="offline_data.js?v=2.0" defer></script>
+
+  <!-- Planos de Leitura (fonte única, usa BIBLE_BOOKS) -->
+  <script src="reading_plans.js?v=1.0" defer></script>
   
   <!-- Sistema de Dropdowns Customizados (flat, minimalista) -->
-  <script src="custom-select_v3.js" defer></script>
+  <script src="custom-select_v3.js?v=2.0" defer></script>
 
   <!-- Lógica Principal do Aplicativo -->
-  <script src="app.js?v=16.0" defer></script>
+  <script src="app.js?v=18.0" defer></script>
 
   <!-- Lógica de PWA (Instalação e Service Worker) -->
-  <script src="pwa.js?v=15.0" defer></script>
+  <script src="pwa.js?v=16.0" defer></script>
 
 
 </head>
@@ -638,7 +641,7 @@
           Área de Perigo
         </div>
         <button id="btn-wipe-data" class="btn-secondary" style="width: 100%; padding: 10px; height: 38px; color: #ef4444; border-color: rgba(239, 68, 68, 0.5); background-color: rgba(239, 68, 68, 0.05); margin-top: 12px;">Apagar Todos os Dados</button>
-        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: center;">Isso excluirá permanentemente todos os seus favoritos, notas, destaques e histórico de leitura na nuvem e no dispositivo.</p>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px; text-align: center;">Isso excluirá permanentemente todos os seus favoritos, notas, destaques, progresso e histórico de leitura, além do perfil e das preferências, na nuvem e no dispositivo.</p>
       </div>
     </div>
   </div>
@@ -686,7 +689,7 @@
       <div class="settings-group" style="border-top: 1px solid var(--border-color); padding-top: 20px;">
         <div class="settings-label">Modo Local &amp; Offline ⚡</div>
         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 8px 0 0 0;">
-          O site está configurado no modo offline. As 13 traduções estão salvas localmente no projeto. A leitura e a busca funcionam instantaneamente, sem consumir dados de internet e sem limites de acesso!
+          Cada tradução é baixada uma única vez e fica salva no aparelho. Depois disso, a leitura e a busca nela funcionam instantaneamente, inclusive sem internet. Marcações feitas offline são enviadas para a nuvem assim que a conexão voltar.
         </p>
       </div>
 
@@ -847,31 +850,6 @@
 
   <!-- Toast Container para avisos do sistema -->
   <div id="toast" class="toast" role="alert" aria-live="polite"></div>
-
-  <!-- ==================== TELA DE AGUARDANDO APROVAÇÃO ==================== -->
-  <div id="pending-approval-screen" class="pending-approval-screen" style="display: none;">
-    <div class="pending-content">
-      <div class="pending-icon-wrap">
-        <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
-        </svg>
-      </div>
-      <h2 class="pending-title">Aguardando Aprovação</h2>
-      <p class="pending-description">Sua conta foi criada com sucesso! No entanto, o acesso à Bíblia Live precisa ser aprovado pelo administrador.</p>
-      <p class="pending-description" style="font-size: 13px; margin-top: 8px;">Assim que sua conta for aprovada, você receberá acesso completo à plataforma. Enquanto isso, aguarde com paciência.</p>
-      <div class="pending-email" id="pending-user-email"></div>
-      <button id="btn-pending-logout" class="pending-logout-btn">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-          <polyline points="16 17 21 12 16 7"></polyline>
-          <line x1="21" y1="12" x2="9" y2="12"></line>
-        </svg>
-        Sair da Conta
-      </button>
-      <p class="pending-verse">"Esperei com paciência no Senhor, e ele se inclinou para mim, e ouviu o meu clamor."<br><em>— Salmos 40:1</em></p>
-    </div>
-  </div>
 
   <!-- Banner Flutuante de Instalação (PWA) -->
   <div id="pwa-install-banner" class="pwa-install-banner" style="display: none;">

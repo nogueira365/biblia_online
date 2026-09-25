@@ -1,22 +1,26 @@
 {
+  "id": "./",
   "name": "Bíblia Live",
   "short_name": "Bíblia",
   "description": "Bíblia Sagrada online com diversas traduções, temas dinâmicos e leitura offline.",
-  "start_url": "/index.html",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "lang": "pt-BR",
   "icons": [
     {
-      "src": "imagens/app-icon.png",
+      "src": "imagens/app-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "imagens/app-icon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

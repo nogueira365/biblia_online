@@ -1,16 +1,10 @@
 // auth.js
 // Lógica de Autenticação (Supabase Auth) e Sincronização de Dados na Nuvem
 
-// E-mail do administrador (único com poder de aprovar usuários)
-const ADMIN_EMAIL = "nogueira.analytics@gmail.com";
-
 // Estado de sincronização atual
 const syncState = {
   isLoggedIn: false,
   currentUser: null,
-  syncPendingCount: 0,
-  isApproved: false,
-  isAdmin: false,
   hasPendingChanges: false
 };
 
@@ -221,6 +215,17 @@ function cloudSaveReadChapter(chapterKey, isAdding) {
     : { table: "read_chapters", action: "delete", match: { chapter_key: chapterKey } });
 }
 
+// Marca vários capítulos como lidos numa única requisição
+function cloudSaveReadChapters(chapterKeys) {
+  if (!chapterKeys || chapterKeys.length === 0) return Promise.resolve(true);
+  return cloudWrite({
+    table: "read_chapters",
+    action: "upsert",
+    onConflict: "user_id,chapter_key",
+    rows: chapterKeys.map(key => ({ chapter_key: key }))
+  });
+}
+
 function cloudSaveReadingPlanDay(planId, dayKey, isCompleted) {
   return cloudWrite({
     table: "reading_plans",
@@ -252,8 +257,9 @@ async function fetchReadingPlansCatalog() {
           days: plan.days_data
         };
       });
-      // Mesclar os planos do banco com os planos locais para garantir que todos apareçam
-      window.READING_PLANS = { ...(window.READING_PLANS || {}), ...plansObj };
+      // Mesclar os planos do banco com os locais (reading_plans.js). Os locais prevalecem:
+      // o banco só acrescenta planos novos, e um catálogo desatualizado não sobrescreve os corrigidos.
+      window.READING_PLANS = { ...plansObj, ...(window.READING_PLANS || {}) };
       
       // Chamar a função para re-renderizar a gaveta caso ela esteja aberta
       if (typeof populatePlanSelect === "function") populatePlanSelect();
@@ -612,6 +618,15 @@ function initAuthUI() {
           openDrawer("profile-drawer");
         }
         
+        // Alterar senha só faz sentido para contas com login por e-mail e senha (não Google)
+        const user = syncState.currentUser;
+        const hasPasswordLogin = (user.identities || []).some(identity => identity.provider === "email")
+          || (user.app_metadata && user.app_metadata.provider === "email");
+        const changePasswordForm = document.getElementById("change-password-form");
+        if (changePasswordForm && changePasswordForm.parentElement) {
+          changePasswordForm.parentElement.hidden = !hasPasswordLogin;
+        }
+
         // Preencher e-mail readonly
         const profileEmail = document.getElementById("profile-email-readonly");
         if (profileEmail) {
@@ -792,7 +807,7 @@ function initAuthUI() {
   const btnWipeData = document.getElementById("btn-wipe-data");
   if (btnWipeData) {
     btnWipeData.addEventListener("click", async () => {
-      const isConfirmed = confirm("ATENÇÃO: Você está prestes a excluir permanentemente todos os seus favoritos, notas, destaques e histórico de leitura.\n\nEssa ação não pode ser desfeita. Tem certeza de que deseja continuar?");
+      const isConfirmed = confirm("ATENÇÃO: Você está prestes a excluir permanentemente todos os seus favoritos, notas, destaques, progresso e histórico de leitura, além do seu perfil e preferências.\n\nEssa ação não pode ser desfeita. Tem certeza de que deseja continuar?");
       
       if (isConfirmed) {
         if (syncState.isLoggedIn && syncState.currentUser && supabase) {
@@ -801,7 +816,7 @@ function initAuthUI() {
             const userId = syncState.currentUser.id;
             
             // Deletar do banco de dados (o Supabase devolve { error } em vez de lançar exceção)
-            const tables = ["highlights", "notes", "favorites", "read_verses", "read_chapters", "read_books", "reading_plans", "reading_history"];
+            const tables = ["highlights", "notes", "favorites", "read_verses", "read_chapters", "read_books", "reading_plans", "reading_history", "user_preferences"];
             for (const table of tables) {
               const { error } = await supabase.from(table).delete().eq("user_id", userId);
               if (error) throw error;
@@ -897,9 +912,16 @@ function processAndSaveAvatar(file) {
 }
 
 
+// Resolvida quando o estado inicial de login é conhecido (sessão restaurada ou ausente)
+let resolveAuthReady;
+window.authReady = new Promise(resolve => { resolveAuthReady = resolve; });
+
 // Ouvir alterações no estado de Autenticação do Supabase
 function listenToAuthChanges() {
-  if (!supabase) return;
+  if (!supabase) {
+    resolveAuthReady();
+    return;
+  }
 
   supabase.auth.onAuthStateChange((event, session) => {
     // Não usar await aqui: chamar o Supabase dentro deste callback pode travar o SDK (deadlock).
@@ -922,7 +944,6 @@ async function handleAuthEvent(event, session) {
   if (session) {
     syncState.isLoggedIn = true;
     syncState.currentUser = session.user;
-    syncState.isAdmin = (session.user.email === ADMIN_EMAIL);
 
     // Atualizar UI do cabeçalho
     if (typeof updateGreeting === "function") {
@@ -934,6 +955,7 @@ async function handleAuthEvent(event, session) {
 
     const btnAuth = document.getElementById("btn-auth");
     if (btnAuth) btnAuth.title = `Conectado como ${session.user.email}`;
+    resolveAuthReady();
 
     // TOKEN_REFRESHED, USER_UPDATED e o SIGNED_IN reemitido ao voltar para a aba
     // não exigem nova sincronização completa: só reenvia o que estiver pendente.
@@ -942,10 +964,6 @@ async function handleAuthEvent(event, session) {
       return;
     }
     lastSyncedUserId = session.user.id;
-
-    // Cadastro direto: sem necessidade de aprovação
-    syncState.isApproved = true;
-    hidePendingScreen();
 
     try {
       await syncCloudData();
@@ -956,14 +974,12 @@ async function handleAuthEvent(event, session) {
     lastSyncedUserId = null;
     syncState.isLoggedIn = false;
     syncState.currentUser = null;
-    syncState.isApproved = false;
-    syncState.isAdmin = false;
 
     const btnAuth = document.getElementById("btn-auth");
     if (btnAuth) btnAuth.title = "Entrar / Criar Conta";
+    resolveAuthReady();
 
     updateSyncIndicator("offline");
-    hidePendingScreen();
 
     // Se acabou de deslogar (SIGNED_OUT), recarregar a página para limpar o estado em memória
     if (event === "SIGNED_OUT") {
@@ -1443,77 +1459,6 @@ function setupCustomFlatpickrHeader(instance) {
   }
 }
 
-// ==========================================================================
-// SISTEMA DE APROVAÇÃO DE USUÁRIOS
-// ==========================================================================
-
-// Verifica o status de aprovação do usuário. Se não existir registro, cria um como 'pending'.
-async function checkUserApproval(user) {
-  if (!supabase || !user) return "pending";
-  
-  // Admin é sempre aprovado
-  if (user.email === ADMIN_EMAIL) return "approved";
-  
-  try {
-    // Verificar se já existe um registro de aprovação
-    const { data, error } = await supabase
-      .from("user_approvals")
-      .select("status")
-      .eq("user_id", user.id)
-      .single();
-    
-    if (error && error.code === "PGRST116") {
-      // Não encontrou registro — criar um novo como 'pending'
-      await supabase.from("user_approvals").insert({
-        user_id: user.id,
-        email: user.email,
-        status: "pending"
-      });
-      return "pending";
-    }
-    
-    if (error) {
-      console.error("Erro ao verificar aprovação:", error);
-      return "pending";
-    }
-    
-    return data.status || "pending";
-  } catch (err) {
-    console.error("Erro inesperado ao verificar aprovação:", err);
-    return "pending";
-  }
-}
-
-// Mostra a tela de "Aguardando Aprovação"
-function showPendingScreen(email) {
-  const screen = document.getElementById("pending-approval-screen");
-  if (screen) {
-    screen.style.display = "flex";
-    const emailEl = document.getElementById("pending-user-email");
-    if (emailEl) emailEl.textContent = email;
-  }
-  
-  // Botão de logout na tela de pendente
-  const btnPendingLogout = document.getElementById("btn-pending-logout");
-  if (btnPendingLogout) {
-    btnPendingLogout.onclick = async () => {
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.error("Erro ao sair:", e);
-      }
-    };
-  }
-}
-
-// Esconde a tela de "Aguardando Aprovação"
-function hidePendingScreen() {
-  const screen = document.getElementById("pending-approval-screen");
-  if (screen) screen.style.display = "none";
-}
-
-
-
 // Atualiza a saudação do usuário no cabeçalho
 window.updateGreeting = function() {
   const greetingEl = document.getElementById("user-email");
@@ -1543,7 +1488,7 @@ window.updateGreeting = function() {
   
   greetingEl.innerHTML = `
     <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">
-      ${greeting}, ${displayName}!
+      ${greeting}, ${escapeHTML(displayName)}!
     </div>
     <div style="font-size: 11px; font-weight: 400; color: var(--text-muted); line-height: 1.2; word-break: normal; white-space: normal;">
       Que a paz do Senhor Jesus Cristo esteja com você!
