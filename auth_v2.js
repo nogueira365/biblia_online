@@ -5,7 +5,8 @@
 const syncState = {
   isLoggedIn: false,
   currentUser: null,
-  hasPendingChanges: false
+  hasPendingChanges: false,
+  lastCloudError: null // último erro ao enviar alterações (para mensagens ao usuário)
 };
 
 let birthdatePicker = null;
@@ -98,10 +99,27 @@ function canSyncWithCloud() {
   return !!(supabase && syncState.isLoggedIn && syncState.currentUser);
 }
 
-// Erros que nunca se resolvem com nova tentativa (dado inválido, restrição violada, permissão/tabela)
-function isPermanentCloudError(error) {
-  return !!(error && typeof error.code === "string" && /^(22|23|42)/.test(error.code));
+// Tabela ou coluna inexistente no banco: é configuração do Supabase desatualizada, que se resolve
+// executando o SQL que falta. A alteração fica na fila (não é descartada) até lá.
+function isSchemaCloudError(error) {
+  return !!(error && typeof error.code === "string" && /^(PGRST20[45]|42P01|42703)$/.test(error.code));
 }
+
+// Erros que nunca se resolvem com nova tentativa (dado inválido, restrição violada, permissão)
+function isPermanentCloudError(error) {
+  return !!(error && typeof error.code === "string" && /^(22|23|42)/.test(error.code)) && !isSchemaCloudError(error);
+}
+
+// Mensagem de erro compreensível para o usuário
+function describeCloudError(error) {
+  if (isSchemaCloudError(error)) {
+    return `O banco de dados na nuvem está desatualizado: ${error.message}. Execute os scripts da pasta supabase/ no Supabase.`;
+  }
+  return (error && error.message) || "Erro desconhecido.";
+}
+
+// Evita repetir o mesmo aviso de configuração a cada alteração
+let schemaErrorNotified = false;
 
 // Executa uma operação da fila. O Supabase não lança exceção: devolve { error }.
 async function runCloudOp(op, userId) {
@@ -140,6 +158,11 @@ function flushOutbox() {
       } catch (error) {
         if (!isPermanentCloudError(error)) {
           console.warn("Falha ao enviar alteração para a nuvem; ela ficará pendente:", error);
+          syncState.lastCloudError = error;
+          if (isSchemaCloudError(error) && !schemaErrorNotified) {
+            schemaErrorNotified = true;
+            showToast(describeCloudError(error), "error");
+          }
           syncState.hasPendingChanges = true;
           updateSyncIndicator("pending");
           return false;
@@ -152,6 +175,7 @@ function flushOutbox() {
       ops = loadOutbox().slice(1);
       saveOutbox(ops);
     }
+    syncState.lastCloudError = null;
     if (syncState.hasPendingChanges) {
       syncState.hasPendingChanges = false;
       updateSyncIndicator("online");
@@ -547,7 +571,7 @@ function initAuthUI() {
           showToast("Sincronização em nuvem concluída!", "success");
         } catch (error) {
           console.error("Erro na sincronização:", error);
-          showToast("Erro ao sincronizar dados com a nuvem.", "error");
+          showToast("Erro ao sincronizar: " + describeCloudError(error), "error");
         }
       }
     });
@@ -959,6 +983,9 @@ async function handleAuthEvent(event, session) {
 
     // TOKEN_REFRESHED, USER_UPDATED e o SIGNED_IN reemitido ao voltar para a aba
     // não exigem nova sincronização completa: só reenvia o que estiver pendente.
+    // Foto de perfil salva no aparelho: aparece mesmo se a sincronização falhar
+    updateAvatarUI(state.avatarUrl);
+
     if (lastSyncedUserId === session.user.id) {
       flushOutbox();
       return;
@@ -1050,7 +1077,7 @@ function syncCloudData() {
       // Nunca baixar da nuvem com alterações locais ainda não enviadas
       const flushed = await flushOutbox();
       if (!flushed) {
-        throw new Error("Existem alterações locais pendentes que não puderam ser enviadas.");
+        throw syncState.lastCloudError || new Error("Existem alterações locais pendentes que não puderam ser enviadas.");
       }
 
       await pullDataFromCloud(userId);

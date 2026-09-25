@@ -23,6 +23,7 @@ No **SQL Editor** do Supabase, execute, nesta ordem, os arquivos da pasta [`supa
 1. [`supabase_setup.sql`](supabase/supabase_setup.sql): tabelas do usuário (marcações, notas, favoritos, leituras, planos, histórico, preferências) e políticas RLS.
 2. [`reading_plans_catalog.sql`](supabase/reading_plans_catalog.sql): catálogo de planos de leitura.
 3. [`security_fixes.sql`](supabase/security_fixes.sql): remove a tabela antiga de aprovação de usuários e padroniza a coluna `birth_date`.
+4. [`create_read_chapters.sql`](supabase/create_read_chapters.sql): cria a tabela `read_chapters` em bancos criados antes de ela existir. Se ela faltar, a sincronização avisa que o banco está desatualizado e segura as alterações até a tabela ser criada.
 
 Todos podem ser executados mais de uma vez.
 
