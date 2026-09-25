@@ -78,6 +78,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return; // Interrompe a execução, não esconde a landing page
       }
 
+      // Da próxima vez o app abre direto na leitura (ver script no <head> do index.html)
+      try { localStorage.setItem("landing_seen", "1"); } catch (e) { /* armazenamento indisponível */ }
+
       // Ocultar (não remover) a landing page para poder voltar depois
       const landingPage = document.getElementById("landing-page");
       if (landingPage) {
@@ -87,6 +90,18 @@ document.addEventListener("DOMContentLoaded", () => {
           landingPage.classList.remove("landing-exit");
         }, 650);
       }
+    });
+  }
+
+  // Quem já passou pela landing abre direto na leitura; se a sessão não existir mais
+  // (e houver login disponível), a landing volta a aparecer para pedir o login
+  if (document.documentElement.classList.contains("skip-landing")) {
+    const authKnown = window.authReady
+      ? Promise.race([window.authReady, new Promise(resolve => setTimeout(resolve, 3000))])
+      : Promise.resolve();
+    authKnown.then(() => {
+      const cloudAvailable = typeof supabase !== "undefined" && !!supabase;
+      if (cloudAvailable && typeof syncState !== "undefined" && !syncState.isLoggedIn) showLandingPage();
     });
   }
 
@@ -156,6 +171,7 @@ function setSidebarCollapsed(collapsed, persist = true) {
 function showLandingPage() {
   const landingPage = document.getElementById("landing-page");
   if (!landingPage) return;
+  document.documentElement.classList.remove("skip-landing");
   landingPage.style.display = "flex";
   // Força reflow para a animação funcionar
   void landingPage.offsetWidth;
@@ -343,6 +359,7 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
     state.readStatus.chapters.push(`${currentBook}-${currentChapter}`);
     if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(`${currentBook}-${currentChapter}`, true);
     saveStateToLocalStorage();
+    syncPlanProgressWithReading();
 
     // Atualiza botoes
     const btnMarkBookRead = document.getElementById("btn-mark-book-read");
@@ -501,7 +518,39 @@ function initUI() {
   }
 
   // Abertura/Fechamento das Drawers (Modais Deslizantes)
-  document.getElementById("btn-search").addEventListener("click", () => openDrawer("search-drawer"));
+  document.getElementById("btn-search").addEventListener("click", () => {
+    openDrawer("search-drawer");
+    const bookData = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
+    const bookChip = document.getElementById("search-scope-book");
+    if (bookChip && bookData) bookChip.textContent = `Só ${bookData.name}`;
+    setTimeout(() => document.getElementById("search-input").focus(), 300);
+  });
+
+  // Chips de escopo da busca
+  document.querySelectorAll("#search-scope-chips .filter-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      searchScope = chip.dataset.scope;
+      document.querySelectorAll("#search-scope-chips .filter-chip").forEach(c => c.classList.toggle("active", c === chip));
+      if (document.getElementById("search-input").value.trim()) executeBibleSearch();
+    });
+  });
+
+  // Buscas recentes: tocar repete a busca
+  document.getElementById("search-results-container").addEventListener("click", (e) => {
+    const chip = e.target.closest(".recent-chip");
+    if (!chip) return;
+    document.getElementById("search-input").value = chip.dataset.query;
+    executeBibleSearch();
+  });
+  renderSearchIntro();
+
+  // Chips de tipo nas marcações
+  document.querySelectorAll("#notes-filter-chips .filter-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      notesTypeFilter = chip.dataset.filter;
+      renderFavoritesAndNotes();
+    });
+  });
   document.getElementById("btn-favorites").addEventListener("click", () => {
     state.activeFilterVerseKey = null; // Limpa o filtro exato quando aberto manualmente
     openDrawer("favorites-drawer");
@@ -630,6 +679,7 @@ function initUI() {
         state.readStatus.chapters.push(chapterKey);
         showToast("Capítulo marcado como lido!", "success");
         if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(chapterKey, true);
+        syncPlanProgressWithReading();
       }
 
       saveStateToLocalStorage();
@@ -669,6 +719,7 @@ function initUI() {
         }
         showToast("Livro marcado como lido!", "success");
         if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(bookKey, true);
+        syncPlanProgressWithReading();
       }
 
       saveStateToLocalStorage();
@@ -863,14 +914,7 @@ function closeAllDrawers() {
     searchNotesInput.value = "";
   }
   state.activeFilterVerseKey = null; // Reseta filtro exato ao fechar as gavetas
-  const resultsContainer = document.getElementById("search-results-container");
-  if (resultsContainer) {
-    resultsContainer.innerHTML = `
-      <div style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px;">
-        Pesquise por palavras ou termos completos na versão ativa.
-      </div>
-    `;
-  }
+  renderSearchIntro();
 
   // Se estiver no mobile, também fecha o seletor de livros e o painel "Mais"
   if (isMobileLayout()) {
@@ -1926,6 +1970,7 @@ function openNotesDrawerFiltered(verseKey) {
 
   // Salvar a chave de filtro exato no estado
   state.activeFilterVerseKey = verseKey;
+  notesTypeFilter = "all";
 
   // Abrir a gaveta de favoritos/anotações
   openDrawer("favorites-drawer");
@@ -2069,6 +2114,9 @@ function compareVerseKeys(a, b) {
   return vA - vB;
 }
 
+// Filtro por tipo na lista de marcações: all | notes | favorites | highlights
+let notesTypeFilter = "all";
+
 // Contador de renderizações da lista de marcações (descarta renderizações obsoletas)
 let favoritesRenderSeq = 0;
 
@@ -2088,6 +2136,19 @@ async function renderFavoritesAndNotes() {
     ...Object.keys(state.notes),
     ...state.favorites
   ]);
+
+  // Chips de filtro: estado ativo e contagem de cada tipo
+  const typeCounts = {
+    all: allKeys.size,
+    notes: Object.keys(state.notes).length,
+    favorites: state.favorites.length,
+    highlights: Object.keys(state.highlights).length
+  };
+  document.querySelectorAll("#notes-filter-chips .filter-chip").forEach(chip => {
+    chip.classList.toggle("active", chip.dataset.filter === notesTypeFilter);
+    const count = typeCounts[chip.dataset.filter];
+    chip.querySelector(".chip-count").textContent = count ? `(${count})` : "";
+  });
 
   if (allKeys.size === 0) {
     container.innerHTML = `
@@ -2122,6 +2183,11 @@ async function renderFavoritesAndNotes() {
     if (state.activeFilterVerseKey && verseKey !== state.activeFilterVerseKey) {
       continue;
     }
+
+    // Filtro por tipo (chips)
+    if (notesTypeFilter === "notes" && !state.notes[verseKey]) continue;
+    if (notesTypeFilter === "favorites" && !state.favorites.includes(verseKey)) continue;
+    if (notesTypeFilter === "highlights" && !state.highlights[verseKey]) continue;
 
     const isFav = state.favorites.includes(verseKey);
     const highlight = state.highlights[verseKey];
@@ -2238,13 +2304,47 @@ async function renderFavoritesAndNotes() {
   if (renderId !== favoritesRenderSeq) return;
   container.replaceChildren(fragment);
 
-  if (filterVal && renderedCount === 0) {
+  if ((filterVal || notesTypeFilter !== "all") && renderedCount === 0) {
+    const message = filterVal
+      ? `Nenhum resultado encontrado para "${escapeHTML(searchInput.value)}".`
+      : "Nenhum item neste filtro.";
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px;">
-        Nenhum resultado encontrado para "${escapeHTML(searchInput.value)}".
+        ${message}
       </div>
     `;
   }
+}
+
+// Escopo da busca: all | VT | NT | book (livro atual)
+let searchScope = "all";
+const RECENT_SEARCHES_KEY = "recent_searches";
+
+function loadRecentSearches() {
+  try { return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY)) || []; } catch (e) { return []; }
+}
+
+function addRecentSearch(query) {
+  const normalized = normalizeForSearch(query);
+  const recents = [query, ...loadRecentSearches().filter(q => normalizeForSearch(q) !== normalized)].slice(0, 6);
+  try { localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recents)); } catch (e) { /* ignora */ }
+}
+
+// Estado inicial da gaveta de busca: instrução + buscas recentes
+function renderSearchIntro() {
+  const container = document.getElementById("search-results-container");
+  if (!container) return;
+  const recents = loadRecentSearches();
+  container.innerHTML = `
+    <div class="search-intro">Pesquise por palavras ou termos na versão ativa.</div>
+    ${recents.length ? `
+      <div class="recent-searches">
+        <div class="recent-searches-title">Buscas recentes</div>
+        <div class="filter-chips">
+          ${recents.map(q => `<button type="button" class="filter-chip recent-chip" data-query="${escapeHTML(q)}">${escapeHTML(q)}</button>`).join("")}
+        </div>
+      </div>` : ""}
+  `;
 }
 
 // Executa a busca textual local na tradução ativa
@@ -2275,6 +2375,9 @@ async function executeBibleSearch() {
 
     bibleData.forEach((book, bookIdx) => {
       const bookMeta = BIBLE_BOOKS[bookIdx];
+      // Escopo escolhido nos chips
+      if ((searchScope === "VT" || searchScope === "NT") && bookMeta.testament !== searchScope) return;
+      if (searchScope === "book" && bookMeta.abbrev !== state.currentBook) return;
       book.chapters.forEach((chapter, chapIdx) => {
         const chapterNum = chapIdx + 1;
         chapter.forEach((verseText, verseIdx) => {
@@ -2297,6 +2400,7 @@ async function executeBibleSearch() {
       verses: foundVerses
     };
 
+    addRecentSearch(query);
     renderSearchResults(searchData, query);
   } catch (error) {
     console.error("Erro ao realizar busca local:", error);
@@ -2512,6 +2616,44 @@ async function exportNotesToMarkdown() {
 
 // Os planos de leitura (window.READING_PLANS) são definidos em reading_plans.js
 
+// Capítulos de um dia do plano: [{ book, chapter }] (dias antigos do banco só têm o capítulo inicial)
+function getPlanDayChapters(day) {
+  const readings = day.readings || [{ book: day.book, from: day.chapter, to: day.chapter }];
+  const chapters = [];
+  readings.forEach(r => {
+    for (let c = r.from; c <= r.to; c++) chapters.push({ book: r.book, chapter: c });
+  });
+  return chapters;
+}
+
+// Conclui automaticamente os dias do plano ativo cujos capítulos já foram todos lidos
+function syncPlanProgressWithReading() {
+  const planId = state.readingPlans && state.readingPlans.activePlanId;
+  const plan = planId && window.READING_PLANS && window.READING_PLANS[planId];
+  if (!plan) return;
+  if (!state.readingPlans.progress) state.readingPlans.progress = {};
+
+  const completedNow = [];
+  plan.days.forEach(day => {
+    const key = `${planId}-${day.day}`;
+    if (state.readingPlans.progress[key]) return;
+    if (getPlanDayChapters(day).every(c => window.isChapterRead(c.book, c.chapter))) {
+      state.readingPlans.progress[key] = true;
+      if (typeof cloudSaveReadingPlanDay === "function") cloudSaveReadingPlanDay(planId, key, true);
+      completedNow.push(day.day);
+    }
+  });
+
+  if (completedNow.length > 0) {
+    saveStateToLocalStorage();
+    showToast(completedNow.length === 1
+      ? `Dia ${completedNow[0]} do plano "${plan.name}" concluído!`
+      : `${completedNow.length} dias do plano "${plan.name}" concluídos!`, "success");
+    const planDrawer = document.getElementById("reading-plan-drawer");
+    if (planDrawer && planDrawer.classList.contains("open")) renderReadingPlan();
+  }
+}
+
 // Renderiza a gaveta do plano de leitura
 function renderReadingPlan() {
   const planSelect = document.getElementById("plan-select");
@@ -2519,6 +2661,8 @@ function renderReadingPlan() {
 
   const planId = state.readingPlans ? state.readingPlans.activePlanId : "";
   planSelect.value = planId;
+  // Reflete o plano ativo no dropdown customizado (o <select> original fica oculto)
+  if (typeof syncCustomSelect === "function") syncCustomSelect(planSelect);
 
   const activePlanContainer = document.getElementById("active-plan-container");
   const noPlanSelectedMessage = document.getElementById("no-plan-selected-message");
@@ -2553,6 +2697,24 @@ function renderReadingPlan() {
   document.getElementById("active-plan-progress").style.width = `${percentage}%`;
   document.getElementById("active-plan-stats").textContent = `${completedDays} de ${totalDays} dias concluídos`;
 
+  // "Continuar": próximo dia ainda não concluído, abrindo no primeiro capítulo não lido dele
+  const continueBtn = document.getElementById("btn-plan-continue");
+  const nextDay = plan.days.find(d => !(state.readingPlans.progress || {})[`${planId}-${d.day}`]);
+  if (continueBtn) {
+    continueBtn.hidden = !nextDay;
+    if (nextDay) {
+      document.getElementById("btn-plan-continue-text").textContent = `Continuar: Dia ${nextDay.day} · ${nextDay.label}`;
+      continueBtn.onclick = () => {
+        const target = getPlanDayChapters(nextDay).find(c => !window.isChapterRead(c.book, c.chapter)) || getPlanDayChapters(nextDay)[0];
+        state.currentBook = target.book;
+        state.currentChapter = target.chapter;
+        saveStateToLocalStorage();
+        loadActiveChapter();
+        closeAllDrawers();
+      };
+    }
+  }
+
   const daysList = document.getElementById("reading-days-list");
   daysList.innerHTML = "";
 
@@ -2572,6 +2734,30 @@ function renderReadingPlan() {
         Ler
       </button>
     `;
+
+    // Dias com vários capítulos: atalho para cada um (lidos aparecem marcados)
+    const dayChapters = getPlanDayChapters(d);
+    if (dayChapters.length > 1) {
+      const multiBook = new Set(dayChapters.map(c => c.book)).size > 1;
+      const chaptersRow = document.createElement("div");
+      chaptersRow.className = "plan-day-chapters";
+      dayChapters.forEach(c => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = `plan-chapter-chip ${window.isChapterRead(c.book, c.chapter) ? "is-read" : ""}`;
+        const bookName = (BIBLE_BOOKS.find(b => b.abbrev === c.book) || {}).name || c.book;
+        chip.textContent = multiBook ? `${bookName} ${c.chapter}` : `Cap. ${c.chapter}`;
+        chip.addEventListener("click", () => {
+          state.currentBook = c.book;
+          state.currentChapter = c.chapter;
+          saveStateToLocalStorage();
+          loadActiveChapter();
+          closeAllDrawers();
+        });
+        chaptersRow.appendChild(chip);
+      });
+      card.appendChild(chaptersRow);
+    }
 
     // Evento do Checkbox
     const checkbox = card.querySelector('input[type="checkbox"]');

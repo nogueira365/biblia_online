@@ -4167,3 +4167,128 @@ textarea {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Gavetas e fluxos: filtros, buscas recentes, plano de leitura e landing
+   ========================================================================== */
+
+/* Landing só na primeira visita (classe aplicada por script no <head>) */
+.skip-landing .landing-page {
+  display: none;
+}
+
+/* Chips de filtro (notas, escopo da busca, buscas recentes) */
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 99px;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-chip:hover {
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
+.filter-chip.active {
+  background-color: var(--accent-muted);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.chip-count {
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.search-form {
+  margin-bottom: 12px;
+}
+
+/* Estado inicial da busca */
+.search-intro {
+  padding: 28px 0 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.recent-searches-title {
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Plano: continuar de onde parou */
+.plan-continue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.plan-continue[hidden] {
+  display: none;
+}
+
+/* Plano: atalhos para os capítulos de cada dia */
+.reading-day-card {
+  flex-wrap: wrap;
+}
+
+.plan-day-chapters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-basis: 100%;
+  margin-top: 10px;
+  padding-left: 30px;
+}
+
+.plan-chapter-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 99px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-chapter-chip:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.plan-chapter-chip.is-read {
+  border-color: transparent;
+  background-color: var(--accent-muted);
+  color: var(--accent-color);
+}
+
+.plan-chapter-chip.is-read::before {
+  content: "✓ ";
+}

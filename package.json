@@ -4,7 +4,8 @@
   "description": "Website premium para leitura da Bíblia",
   "main": "index.html",
   "scripts": {
-    "dev": "npx -y serve ."
+    "dev": "npx -y serve .",
+    "test": "python tests/run_all.py"
   },
   "keywords": [
     "bible",

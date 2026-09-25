@@ -2,6 +2,7 @@
 exclude:
   - supabase/
   - scripts/
+  - tests/
   - "*.md"
   - package.json
   - iniciar_servidor.bat
