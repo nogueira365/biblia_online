@@ -3808,3 +3808,211 @@ textarea {
     padding: 10px 12px;
   }
 }
+
+/* ==========================================================================
+   PC e tablet: seletor de localização, barra lateral recolhível, tooltips e comparação
+   ========================================================================== */
+
+/* Seletor "Provérbios 28 ▾": mostra/esconde a barra lateral de livros */
+.pill-location {
+  gap: 6px;
+  padding: 0 10px 0 16px;
+  background-color: var(--accent-muted);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.pill-location:hover {
+  color: var(--accent-color);
+  background-color: var(--bg-surface-hover);
+}
+
+.pill-chevron {
+  transition: transform 0.2s ease;
+}
+
+.pill-location[aria-expanded="true"] .pill-chevron {
+  transform: rotate(180deg);
+}
+
+/* Barra lateral recolhida (a classe só é aplicada fora do layout de celular) */
+.main-container.sidebar-collapsed .sidebar-pane {
+  display: none;
+}
+
+.sidebar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-collapse-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+/* Mais espaço para a grade de capítulos (antes: 3 linhas visíveis) */
+.chapters-grid {
+  max-height: min(34vh, 300px);
+}
+
+/* Tooltips dos ícones do topo (texto = aria-label), só com mouse */
+@media (hover: hover) and (min-width: 769px) {
+  .has-tooltip::after {
+    content: attr(aria-label);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translate(-50%, -4px);
+    padding: 6px 10px;
+    border-radius: 6px;
+    background-color: var(--tooltip-bg);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.3;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px var(--shadow-color);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 200;
+  }
+
+  .has-tooltip:hover::after,
+  .has-tooltip:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  /* Ícones perto da borda direita: tooltip alinhado à direita para não sair da tela */
+  #btn-auth.has-tooltip::after,
+  #btn-settings.has-tooltip::after {
+    left: auto;
+    right: 0;
+    transform: translate(0, -4px);
+  }
+
+  #btn-auth.has-tooltip:hover::after,
+  #btn-auth.has-tooltip:focus-visible::after,
+  #btn-settings.has-tooltip:hover::after,
+  #btn-settings.has-tooltip:focus-visible::after {
+    transform: translate(0, 0);
+  }
+}
+
+/* Rótulos visíveis "Buscar" e "Notas" em telas largas */
+.desktop-label {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  .has-desktop-label {
+    width: auto;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .has-desktop-label .desktop-label {
+    display: inline;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  /* O rótulo já está visível: tooltip seria redundante */
+  .has-desktop-label.has-tooltip::after {
+    display: none;
+  }
+}
+
+/* Tablet: o seletor mostra livro e capítulo (ele é o botão da barra lateral) */
+@media (min-width: 769px) and (max-width: 1024px) and (min-height: 501px) {
+  #pill-book,
+  #pill-chapter {
+    display: inline;
+  }
+}
+
+/* ---------- Modo comparação ---------- */
+.comparison-header {
+  font-family: 'Outfit', sans-serif;
+  margin-top: 8px;
+  padding-bottom: 2px;
+}
+
+.comparison-header-col {
+  gap: 8px;
+}
+
+.comparison-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.comparison-chip {
+  padding: 3px 12px;
+  border-radius: 99px;
+  background-color: var(--accent-muted);
+  color: var(--accent-color);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cs-wrapper.cs-compare {
+  width: auto;
+}
+
+.cs-wrapper.cs-compare .cs-trigger {
+  height: 30px;
+  padding: 0 10px 0 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cs-wrapper.cs-compare .cs-panel {
+  left: auto;
+  right: 0;
+  min-width: 260px;
+}
+
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+  /* No celular o seletor de livros fica na aba "Livros" */
+  #btn-location {
+    display: none;
+  }
+
+  /* Cabeçalho da comparação em uma linha: "PRINCIPAL NVI · COMPARAR COM ACF ▾" */
+  .comparison-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+  }
+
+  .cs-wrapper.cs-compare .cs-text-full {
+    display: none;
+  }
+
+  .cs-wrapper.cs-compare .cs-text-short {
+    display: inline;
+  }
+
+  /* Blocos empilhados: cada um mostra de qual tradução é */
+  .comparison-row .verse-item::before {
+    content: attr(data-translation);
+    display: block;
+    margin-bottom: 2px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+  }
+}

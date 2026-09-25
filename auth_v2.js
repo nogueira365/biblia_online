@@ -323,7 +323,7 @@ function initAuthUI() {
   if (!supabase) {
     // Se o Supabase não estiver configurado, desativar indicador e ocultar botões se necessário
     updateSyncIndicator("offline");
-    if (btnAuth) btnAuth.title = "Modo Local (Banco de dados não configurado)";
+    if (btnAuth) btnAuth.setAttribute("aria-label", "Modo local (conta indisponível)");
     return;
   }
 
@@ -978,7 +978,7 @@ async function handleAuthEvent(event, session) {
     }
 
     const btnAuth = document.getElementById("btn-auth");
-    if (btnAuth) btnAuth.title = `Conectado como ${session.user.email}`;
+    if (btnAuth) btnAuth.setAttribute("aria-label", `Minha conta (${session.user.email})`);
     resolveAuthReady();
 
     // TOKEN_REFRESHED, USER_UPDATED e o SIGNED_IN reemitido ao voltar para a aba
@@ -1003,7 +1003,7 @@ async function handleAuthEvent(event, session) {
     syncState.currentUser = null;
 
     const btnAuth = document.getElementById("btn-auth");
-    if (btnAuth) btnAuth.title = "Entrar / Criar Conta";
+    if (btnAuth) btnAuth.setAttribute("aria-label", "Entrar ou criar conta");
     resolveAuthReady();
 
     updateSyncIndicator("offline");

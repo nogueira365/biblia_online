@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt" crossorigin="anonymous">
   
   <!-- Estilos Customizados (carregados por último para ter precedência) -->
-  <link rel="stylesheet" href="styles_v7.css?v=18.0">
+  <link rel="stylesheet" href="styles_v7.css?v=19.0">
   
   <!-- Chaves e Configurações do Supabase -->
   <script src="config.js" defer></script>
@@ -35,7 +35,7 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/pt.js" integrity="sha384-agbVpcY312cNMSL1b3CUo060bj9FmbwUX8HUCNSE17+jOU/en4yz3w9ro9IWVusF" crossorigin="anonymous" defer></script>
   
   <!-- Lógica de Autenticação e Sincronização Supabase -->
-  <script src="auth_v2.js?v=19.0" defer></script>
+  <script src="auth_v2.js?v=20.0" defer></script>
   
   <!-- Script de Dados Offline e Configurações (Carrega primeiro) -->
   <script src="offline_data.js?v=2.0" defer></script>
@@ -47,7 +47,7 @@
   <script src="custom-select_v3.js?v=3.0" defer></script>
 
   <!-- Lógica Principal do Aplicativo -->
-  <script src="app.js?v=20.0" defer></script>
+  <script src="app.js?v=21.0" defer></script>
 
   <!-- Lógica de PWA (Instalação e Service Worker) -->
   <script src="pwa.js?v=16.0" defer></script>
@@ -131,8 +131,12 @@
       
       <!-- Pills Rápidos de Leitura Atual (Visíveis no Desktop) -->
       <div class="top-pills">
-        <div id="pill-book" class="pill active">Provérbios</div>
-        <div id="pill-chapter" class="pill">28</div>
+        <button id="btn-location" class="pill pill-location" type="button"
+                aria-controls="sidebar-pane" aria-expanded="true" title="Mostrar ou esconder livros e capítulos">
+          <span id="pill-book">Provérbios</span>
+          <span id="pill-chapter">28</span>
+          <svg class="pill-chevron" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+        </button>
         <select id="translation-select"
                 class="pill-select auto-custom-select"
                 data-cs-class="cs-pill"
@@ -171,7 +175,7 @@
         <span>Fechar</span>
       </button>
       <!-- Botão Modo Comparação -->
-      <button id="btn-compare" class="btn-icon" title="Comparar traduções lado a lado" aria-label="Comparar traduções">
+      <button id="btn-compare" class="btn-icon has-tooltip" aria-label="Comparar traduções">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 14H5V5h6v12zm8 0h-6V5h6v12z"/>
         </svg>
@@ -179,23 +183,25 @@
       </button>
 
       <!-- Botão de Busca -->
-      <button id="btn-search" class="btn-icon" title="Buscar termo na Bíblia" aria-label="Buscar termo">
+      <button id="btn-search" class="btn-icon has-tooltip has-desktop-label" aria-label="Buscar na Bíblia">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
         </svg>
         <span class="action-label">Buscar na Bíblia</span>
+        <span class="desktop-label">Buscar</span>
       </button>
       
       <!-- Botão de Destaques/Notas -->
-      <button id="btn-favorites" class="btn-icon" title="Minhas anotações e favoritos" aria-label="Anotações e Favoritos">
+      <button id="btn-favorites" class="btn-icon has-tooltip has-desktop-label" aria-label="Destaques e notas">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
         </svg>
         <span class="action-label">Destaques e Notas</span>
+        <span class="desktop-label">Notas</span>
       </button>
       
       <!-- Botão de Plano de Leitura -->
-      <button id="btn-reading-plan" class="btn-icon" title="Plano de Leitura Diária" aria-label="Plano de Leitura">
+      <button id="btn-reading-plan" class="btn-icon has-tooltip" aria-label="Plano de leitura">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v2h-5zm-4 0h2v2H8zm4 4h5v2h-5zm-4 0h2v2H8z"/>
         </svg>
@@ -204,7 +210,7 @@
 
       <!-- Botão de Autenticação e Menu de Usuário (Supabase) -->
       <div id="auth-header-container" class="auth-header-container">
-        <button id="btn-auth" class="btn-icon" title="Entrar / Criar Conta" aria-label="Autenticação">
+        <button id="btn-auth" class="btn-icon has-tooltip" aria-label="Minha conta">
           <svg id="user-avatar-svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
           </svg>
@@ -258,7 +264,7 @@
       </div>
 
       <!-- Botão de Configurações de Leitura -->
-      <button id="btn-settings" class="btn-icon" title="Ajustes visuais" aria-label="Ajustes de leitura">
+      <button id="btn-settings" class="btn-icon has-tooltip" aria-label="Configurações">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
         </svg>
@@ -292,11 +298,11 @@
           <h1 id="chapter-title" class="chapter-title">
              <span>Provérbios 28</span>
           </h1>
+          <div id="comparison-header-container"></div>
         </div>
       </div>
 
       <div class="reader-container">
-        <div id="comparison-header-container"></div>
 
         <!-- ✨ VERSÍCULO DO DIA -->
         <div id="verse-of-day-container" class="vod-container" style="display:none;" aria-label="Versículo do Dia">
@@ -360,9 +366,14 @@
     </section>
 
     <!-- Painel Lateral (Direita - Desktop / Menu Hambúrguer - Mobile) -->
-    <aside class="sidebar-pane">
+    <aside id="sidebar-pane" class="sidebar-pane">
       <div class="sidebar-header">
-        <h2 class="sidebar-title">Livros & Capítulos</h2>
+        <div class="sidebar-title-row">
+          <h2 class="sidebar-title">Livros & Capítulos</h2>
+          <button id="btn-sidebar-collapse" class="btn-icon sidebar-collapse-btn" type="button" aria-label="Esconder livros e capítulos" title="Esconder livros e capítulos">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+          </button>
+        </div>
         <div class="search-book-container">
           <svg class="search-book-icon" viewBox="0 0 24 24">
             <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>

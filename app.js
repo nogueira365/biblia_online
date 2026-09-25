@@ -43,6 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStateFromLocalStorage();
   applyPreferences();
   initUI();
+  loadSidebarPreference();
+  window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", applySidebarState);
   // Inicializa os dropdowns customizados (substitui <select> nativos)
   if (typeof initCustomSelects === "function") initCustomSelects();
   const deepLinkVerse = applyDeepLinkFromUrl();
@@ -65,7 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Verifica se o usuário está logado
       if (cloudAvailable && typeof syncState !== "undefined" && !syncState.isLoggedIn) {
         showToast("Por favor, crie uma conta ou faça login para continuar.", "error");
-        
+
         // Abre o modal de autenticação (se a função existir globalmente ou clicando no botão)
         const btnAuth = document.getElementById("btn-auth");
         if (btnAuth) {
@@ -108,6 +110,44 @@ document.addEventListener("keydown", (e) => {
 const MOBILE_LAYOUT_QUERY = "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 function isMobileLayout() {
   return window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+}
+
+// ---------- Barra lateral de livros (PC e tablet) ----------
+// Recolhida/aberta conforme a preferência salva. No celular ela é o seletor em tela cheia
+// e esta preferência não se aplica.
+const SIDEBAR_PREF_KEY = "sidebar_collapsed";
+let sidebarCollapsed = false;
+let sidebarBeforeComparison = null;
+
+function loadSidebarPreference() {
+  let saved = null;
+  try { saved = localStorage.getItem(SIDEBAR_PREF_KEY); } catch (e) { /* armazenamento indisponível */ }
+  // Sem preferência salva: recolhida no tablet, aberta no PC
+  sidebarCollapsed = saved === null ? window.innerWidth <= 1024 : saved === "1";
+  if (state.comparisonActive) {
+    sidebarBeforeComparison = sidebarCollapsed;
+    sidebarCollapsed = true;
+  }
+  applySidebarState();
+}
+
+function applySidebarState() {
+  const collapsed = sidebarCollapsed && !isMobileLayout();
+  document.querySelector(".main-container").classList.toggle("sidebar-collapsed", collapsed);
+  const btnLocation = document.getElementById("btn-location");
+  if (btnLocation) btnLocation.setAttribute("aria-expanded", String(!collapsed));
+}
+
+function setSidebarCollapsed(collapsed, persist = true) {
+  sidebarCollapsed = collapsed;
+  if (persist) {
+    try { localStorage.setItem(SIDEBAR_PREF_KEY, collapsed ? "1" : "0"); } catch (e) { /* ignora */ }
+  }
+  applySidebarState();
+  if (!collapsed) {
+    const activeBook = document.querySelector(".book-item.active");
+    if (activeBook) activeBook.scrollIntoView({ block: "nearest" });
+  }
 }
 
 // Exibe a landing page novamente (ao clicar no home do breadcrumb)
@@ -215,7 +255,7 @@ window.isVerseRead = function(verseKey) {
   if (parts.length < 3) return false;
   const bookKey = parts[0];
   const chapter = parseInt(parts[1], 10);
-  
+
   // Cascatas superiores
   if (state.readStatus && state.readStatus.books && state.readStatus.books.includes(bookKey)) return true;
   if (state.readStatus && state.readStatus.chapters && state.readStatus.chapters.includes(`${bookKey}-${chapter}`)) return true;
@@ -234,7 +274,7 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
   const parts = verseKey.split("-");
   const currentBook = parts[0];
   const currentChapter = parseInt(parts[1], 10);
-  
+
   const isCurrentlyRead = window.isVerseRead(verseKey);
   const targetState = forceState !== undefined ? forceState : !isCurrentlyRead;
   if (isCurrentlyRead === targetState) return; // already in target state
@@ -253,7 +293,7 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
         state.readStatus.books.splice(bkIdx, 1);
         if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(currentBook, false);
       }
-      
+
       // Agora marcar todos os outros versículos como lidos individualmente
       const newlyReadVerses = [];
       for (const vk of getRenderedVerseKeys()) {
@@ -264,13 +304,13 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
       }
       if (typeof cloudSaveReadVerses === "function") cloudSaveReadVerses(newlyReadVerses);
     }
-    
+
     const index = state.readStatus.verses.indexOf(verseKey);
     if (index > -1) state.readStatus.verses.splice(index, 1);
     if (verseEl) verseEl.classList.remove("is-read");
     const cb = verseEl ? verseEl.querySelector(".verse-read-checkbox") : null;
     if (cb) cb.checked = false;
-    
+
     if (typeof cloudSaveReadVerse === "function") cloudSaveReadVerse(verseKey, false);
   } else { // Marcando
     if (!state.readStatus.verses.includes(verseKey)) {
@@ -279,19 +319,19 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
     if (verseEl) verseEl.classList.add("is-read");
     const cb = verseEl ? verseEl.querySelector(".verse-read-checkbox") : null;
     if (cb) cb.checked = true;
-    
+
     if (typeof cloudSaveReadVerse === "function") cloudSaveReadVerse(verseKey, true);
   }
-  
+
   saveStateToLocalStorage();
-  
+
   // Check se todos os versículos do capítulo foram lidos agora
   const allRead = getRenderedVerseKeys().every(vk => window.isVerseRead(vk));
   if (allRead && !window.isChapterRead(currentBook, currentChapter)) {
     state.readStatus.chapters.push(`${currentBook}-${currentChapter}`);
     if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(`${currentBook}-${currentChapter}`, true);
     saveStateToLocalStorage();
-    
+
     // Atualiza botoes
     const btnMarkBookRead = document.getElementById("btn-mark-book-read");
     if (btnMarkBookRead) {
@@ -303,7 +343,7 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
       `;
       btnMarkBookRead.className = "btn-secondary btn-read-active";
     }
-    
+
     const searchBookInput = document.getElementById("search-book-input");
     renderBooksList(searchBookInput ? searchBookInput.value : "");
   }
@@ -360,7 +400,7 @@ function initUI() {
       saveStateToLocalStorage();
       applyPreferences();
       showToast("Tema atualizado com sucesso!", "success");
-      
+
       // Sincroniza preferências com a nuvem
       if (typeof cloudSavePreferences === "function") cloudSavePreferences();
     });
@@ -372,7 +412,7 @@ function initUI() {
       state.fontFamily = btn.getAttribute("data-font");
       saveStateToLocalStorage();
       applyPreferences();
-      
+
       // Sincroniza preferências com a nuvem
       if (typeof cloudSavePreferences === "function") cloudSavePreferences();
     });
@@ -384,7 +424,7 @@ function initUI() {
       state.fontSize = btn.getAttribute("data-size-opt");
       saveStateToLocalStorage();
       applyPreferences();
-      
+
       // Sincroniza preferências com a nuvem
       if (typeof cloudSavePreferences === "function") cloudSavePreferences();
     });
@@ -405,6 +445,13 @@ function initUI() {
     btnCompare.addEventListener("click", () => {
       state.comparisonActive = !state.comparisonActive;
       btnCompare.classList.toggle("active", state.comparisonActive);
+      if (state.comparisonActive) {
+        sidebarBeforeComparison = sidebarCollapsed;
+        setSidebarCollapsed(true, false);
+      } else if (sidebarBeforeComparison !== null) {
+        setSidebarCollapsed(sidebarBeforeComparison, false);
+        sidebarBeforeComparison = null;
+      }
       saveStateToLocalStorage();
       loadActiveChapter();
       showToast(state.comparisonActive ? "Modo comparação ativado!" : "Modo comparação desativado.", "success");
@@ -424,7 +471,7 @@ function initUI() {
     openDrawer("favorites-drawer");
     renderFavoritesAndNotes();
   });
-  
+
   // Filtro de Busca de Anotações/Notas no drawer de Favoritos
   const searchNotesInput = document.getElementById("search-notes-input");
   if (searchNotesInput) {
@@ -545,10 +592,10 @@ function initUI() {
         showToast("Capítulo marcado como lido!", "success");
         if (typeof cloudSaveReadChapter === "function") cloudSaveReadChapter(chapterKey, true);
       }
-      
+
       saveStateToLocalStorage();
       loadActiveChapter(); // Recarrega para aplicar os estilos
-      
+
       // Também renderizar novamente a lista de livros no sidebar
       const searchBookInput = document.getElementById("search-book-input");
       renderBooksList(searchBookInput ? searchBookInput.value : "");
@@ -561,14 +608,14 @@ function initUI() {
     btnMarkEntireBookRead.addEventListener("click", () => {
       const bookKey = state.currentBook;
       const isRead = window.isBookRead(bookKey);
-      
+
       if (isRead) {
         // Desmarcar o livro
         const index = state.readStatus.books.indexOf(bookKey);
         if (index > -1) {
           state.readStatus.books.splice(index, 1);
         }
-        
+
         // Desmarcar todos os capítulos locais também
         if (state.readStatus.chapters) {
           state.readStatus.chapters = state.readStatus.chapters.filter(chap => !chap.startsWith(`${bookKey}-`));
@@ -584,10 +631,10 @@ function initUI() {
         showToast("Livro marcado como lido!", "success");
         if (typeof cloudSaveReadBook === "function") cloudSaveReadBook(bookKey, true);
       }
-      
+
       saveStateToLocalStorage();
       loadActiveChapter(); // Recarrega para aplicar os estilos
-      
+
       const searchBookInput = document.getElementById("search-book-input");
       renderBooksList(searchBookInput ? searchBookInput.value : "");
     });
@@ -627,7 +674,7 @@ function initUI() {
       sidebar.classList.remove("open");
       document.getElementById("overlay").classList.remove("active");
     }
-    
+
     // Fechar menu de ações do topo
     const topActions = document.querySelector(".top-actions");
     if (topActions && topActions.classList.contains("open")) {
@@ -635,6 +682,14 @@ function initUI() {
     }
     setActiveTab("ler");
   });
+
+  // Seletor "Provérbios 28 ▾": no celular abre o seletor de livros; no PC mostra/esconde a barra lateral
+  document.getElementById("btn-location").addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (isMobileLayout()) openBookPicker();
+    else setSidebarCollapsed(!sidebarCollapsed);
+  });
+  document.getElementById("btn-sidebar-collapse").addEventListener("click", () => setSidebarCollapsed(true));
 
   // Barra de abas inferior (celular)
   document.querySelectorAll("#mobile-tab-bar .tab-btn").forEach(tabBtn => {
@@ -747,7 +802,7 @@ function initUI() {
 function closeAllDrawers() {
   document.querySelectorAll(".drawer").forEach(drawer => drawer.classList.remove("open"));
   document.getElementById("overlay").classList.remove("active");
-  
+
   // Limpar campo de busca e resultados da busca ao fechar
   const searchInput = document.getElementById("search-input");
   if (searchInput) {
@@ -766,7 +821,7 @@ function closeAllDrawers() {
       </div>
     `;
   }
-  
+
   // Se estiver no mobile, também fecha o seletor de livros e o painel "Mais"
   if (isMobileLayout()) {
     const sidebar = document.querySelector(".sidebar-pane");
@@ -926,7 +981,7 @@ function selectBook(abbrev) {
   state.currentBook = abbrev;
   state.currentChapter = 1; // Reseta para o primeiro capítulo ao mudar de livro
   saveStateToLocalStorage();
-  
+
   // Atualizar classe active na lista
   document.querySelectorAll(".book-item").forEach(el => el.classList.remove("active"));
   renderBooksList(document.getElementById("search-book-input").value);
@@ -961,7 +1016,7 @@ function renderChaptersGrid(bookAbbrev = state.currentBook) {
       btn.classList.add("active");
 
       loadActiveChapter();
-      
+
       // No mobile, fecha o seletor ao escolher o capítulo
       if (isMobileLayout()) closeBookPicker();
     });
@@ -1013,16 +1068,16 @@ const translationLoading = {};
 async function ensureTranslationLoaded(version) {
   const v = String(version || "nvi").toLowerCase();
   const globalVarName = `BIBLE_DATA_${v.toUpperCase()}`;
-  
+
   if (translationCache[v]) {
     return translationCache[v];
   }
-  
+
   if (window[globalVarName]) {
     translationCache[v] = window[globalVarName];
     return translationCache[v];
   }
-  
+
   // Se a tradução já está sendo baixada, reaproveita o mesmo carregamento (arquivos de ~4 MB)
   if (translationLoading[v]) {
     return translationLoading[v];
@@ -1062,23 +1117,23 @@ async function getChapterData(version, abbrev, chapter) {
 
   // Garantir que a tradução está carregada
   const bibleData = await ensureTranslationLoaded(version);
-  
+
   // Encontrar o livro correspondente no BIBLE_BOOKS
   const bookIndex = BIBLE_BOOKS.findIndex(b => b.abbrev.toLowerCase() === abbrev);
   if (bookIndex === -1) {
     throw new Error(`Livro com abreviação "${abbrev}" não encontrado.`);
   }
-  
+
   const bookDataInJson = bibleData[bookIndex];
   if (!bookDataInJson) {
     throw new Error(`Livro no índice ${bookIndex} não encontrado na tradução.`);
   }
-  
+
   const chapterData = bookDataInJson.chapters[chapter - 1];
   if (!chapterData) {
     throw new Error(`Capítulo ${chapter} não encontrado no livro ${bookDataInJson.name}.`);
   }
-  
+
   // Mapear versículos para o formato esperado pelo renderizador do DOM
   const verses = chapterData.map((text, idx) => {
     return {
@@ -1086,7 +1141,7 @@ async function getChapterData(version, abbrev, chapter) {
       text: text
     };
   });
-  
+
   const bookMeta = BIBLE_BOOKS[bookIndex];
   return {
     book: bookMeta,
@@ -1104,7 +1159,7 @@ async function loadActiveChapter() {
   const isStale = () => renderId !== chapterRenderSeq;
   const readerPane = document.getElementById("reader-pane");
   const versesContainer = document.getElementById("verses-container");
-  
+
   // Limpar versículos anteriores e mostrar skeleton/carregando
   versesContainer.innerHTML = `
     <div style="padding: 40px 0; text-align: center; color: var(--text-secondary);">
@@ -1128,7 +1183,7 @@ async function loadActiveChapter() {
 
   try {
     const bookData = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
-    
+
     // Atualizar breadcrumbs
     const breadcrumbBook = document.getElementById("bc-book");
     const breadcrumbChapter = document.getElementById("bc-chapter");
@@ -1144,7 +1199,7 @@ async function loadActiveChapter() {
     // Atualizar título do capítulo e botão de marcar lido
     const chapterTitleEl = document.getElementById("chapter-title");
     const versionLabel = state.currentTranslation.toUpperCase();
-    
+
     // Atualizar texto do botão de marcar capítulo como lido
     const btnMarkBookRead = document.getElementById("btn-mark-book-read");
     if (btnMarkBookRead) {
@@ -1170,7 +1225,7 @@ async function loadActiveChapter() {
       `;
       btnMarkEntireBookRead.className = isBookReadFlag ? "btn-link btn-read-active" : "btn-link";
     }
-    
+
     chapterTitleEl.innerHTML = `
       <div class="chapter-title-main">
         <button id="btn-title-prev" class="btn-icon title-nav-btn" aria-label="Capítulo anterior" title="Capítulo anterior">
@@ -1206,68 +1261,60 @@ async function loadActiveChapter() {
     versesContainer.innerHTML = "";
     const compHeaderContainer = document.getElementById("comparison-header-container");
     if (compHeaderContainer) compHeaderContainer.innerHTML = "";
-    
+
     if (state.comparisonActive) {
       // Carregar a tradução secundária para comparação
       const compData = await getChapterData(state.comparisonTranslation, state.currentBook, state.currentChapter);
       if (isStale()) return;
-      
+
       // Renderizar o cabeçalho da comparação
       const headerDiv = document.createElement("div");
       headerDiv.className = "comparison-header";
       headerDiv.innerHTML = `
         <div class="comparison-header-col">
-          <span>Principal: ${state.currentTranslation.toUpperCase()}</span>
+          <span class="comparison-label">Principal</span>
+          <span class="comparison-chip">${escapeHTML(state.currentTranslation.toUpperCase())}</span>
         </div>
         <div class="comparison-header-col">
-          <span>Comparar com:</span>
-          <select id="comparison-translation-select" class="translation-select" style="font-size:12px; padding: 4px 8px; margin-left: 6px;">
-            <option value="acf">ACF - Corrigida e Fiel</option>
-            <option value="ara">ARA - Revista e Atualizada</option>
-            <option value="arc">ARC - Revista e Corrigida</option>
-            <option value="as21">AS21 - Almeida Século 21</option>
-            <option value="jfaa">JFAA - Ferreira de Almeida</option>
-            <option value="kja">KJA - King James Atualizada</option>
-            <option value="kjf">KJF - King James Fiel</option>
-            <option value="naa">NAA - Nova Almeida Atualizada</option>
-            <option value="nbv">NBV - Nova Bíblia Viva</option>
-            <option value="ntlh">NTLH - Linguagem de Hoje</option>
-            <option value="nvi">NVI - Nova Versão Internacional</option>
-            <option value="nvt">NVT - Nova Versão Transformadora</option>
-            <option value="tb">TB - Tradução Brasileira</option>
-          </select>
+          <span class="comparison-label">Comparar com</span>
+          <select id="comparison-translation-select" class="auto-custom-select" data-cs-class="cs-compare" aria-label="Tradução para comparar"></select>
         </div>
       `;
+      // Mesmas opções do seletor principal (com rótulos curtos para telas pequenas)
+      const compSelectEl = headerDiv.querySelector("#comparison-translation-select");
+      document.querySelectorAll("#translation-select option").forEach(opt => compSelectEl.appendChild(opt.cloneNode(true)));
       if (compHeaderContainer) compHeaderContainer.appendChild(headerDiv);
-      
+
       // Ajustar valor do seletor secundário e bind de evento
       const compSelect = headerDiv.querySelector("#comparison-translation-select");
       compSelect.value = state.comparisonTranslation;
+      if (typeof createCustomSelect === "function") createCustomSelect(compSelect);
       compSelect.addEventListener("change", (e) => {
         state.comparisonTranslation = e.target.value;
         saveStateToLocalStorage();
         loadActiveChapter();
       });
-      
+
       // Combinar os versículos
       const totalVerses = Math.max(data.verses.length, compData.verses.length);
       for (let i = 0; i < totalVerses; i++) {
         // text null = a tradução não tem este versículo; "" = versículo agrupado ao anterior
         const vPrimary = data.verses[i] || { number: i + 1, text: null };
         const vSecondary = compData.verses[i] || { number: i + 1, text: null };
-        
+
         const rowDiv = document.createElement("div");
         rowDiv.className = "comparison-row";
-        
+
         // Coluna Principal
         const keyPrimary = `${state.currentBook}-${state.currentChapter}-${vPrimary.number}`;
         const hlPrimary = state.highlights[keyPrimary] || "";
         const notePrimary = state.notes[keyPrimary] ? "has-note" : "";
-        
+
         const primaryCol = document.createElement("div");
         primaryCol.className = `verse-item primary-col ${hlPrimary} ${notePrimary}`;
         primaryCol.setAttribute("data-verse-number", vPrimary.number);
         primaryCol.setAttribute("data-verse-key", keyPrimary);
+        primaryCol.setAttribute("data-translation", state.currentTranslation.toUpperCase());
         primaryCol.innerHTML = comparisonCellHTML(vPrimary);
         if (state.notes[keyPrimary]) {
           addNoteButtonToVerse(primaryCol, keyPrimary);
@@ -1277,26 +1324,22 @@ async function loadActiveChapter() {
           e.stopPropagation();
           openVerseMenu(primaryCol, keyPrimary, vPrimary.number);
         });
-        
-        // Coluna Secundária
+
+        // Coluna Secundária: só leitura visual (destaques e notas pertencem à coluna principal)
         const keySecondary = `${state.currentBook}-${state.currentChapter}-${vSecondary.number}`;
-        const hlSecondary = state.highlights[keySecondary] || "";
-        const noteSecondary = state.notes[keySecondary] ? "has-note" : "";
-        
+
         const secondaryCol = document.createElement("div");
-        secondaryCol.className = `verse-item secondary-col ${hlSecondary} ${noteSecondary}`;
+        secondaryCol.className = "verse-item secondary-col";
         secondaryCol.setAttribute("data-verse-number", vSecondary.number);
         secondaryCol.setAttribute("data-verse-key", keySecondary);
+        secondaryCol.setAttribute("data-translation", state.comparisonTranslation.toUpperCase());
         secondaryCol.innerHTML = comparisonCellHTML(vSecondary);
-        if (state.notes[keySecondary]) {
-          addNoteButtonToVerse(secondaryCol, keySecondary);
-        }
         secondaryCol.addEventListener("click", (e) => {
           if (e.target.closest(".btn-verse-note")) return;
           e.stopPropagation();
           openVerseMenu(secondaryCol, keySecondary, vSecondary.number);
         });
-        
+
         rowDiv.appendChild(primaryCol);
         rowDiv.appendChild(secondaryCol);
         versesContainer.appendChild(rowDiv);
@@ -1316,7 +1359,7 @@ async function loadActiveChapter() {
         verseDiv.className = `verse-item ${highlightClass} ${hasNote} ${isReadClass}`;
         verseDiv.setAttribute("data-verse-number", v.number);
         verseDiv.setAttribute("data-verse-key", verseKey);
-        
+
         verseDiv.innerHTML = `
           <input type="checkbox" class="verse-read-checkbox" ${window.isVerseRead(verseKey) ? 'checked' : ''} title="Marcar como lido" style="margin-right: 6px; cursor: pointer; accent-color: var(--accent-color);">
           <span class="verse-number">${verseLabel}</span>
@@ -1454,7 +1497,7 @@ function addToHistory(bookName, chapter) {
 
   // Remover duplicações recentes do mesmo capítulo
   state.history = state.history.filter(h => !(h.book === state.currentBook && h.chapter === chapter));
-  
+
   // Inserir no topo
   state.history.unshift({
     book: state.currentBook,
@@ -1467,9 +1510,9 @@ function addToHistory(bookName, chapter) {
   if (state.history.length > 15) {
     state.history.pop();
   }
-  
+
   saveStateToLocalStorage();
-  
+
   // Salva no histórico em nuvem se logado
   if (typeof cloudAddHistory === "function") cloudAddHistory(state.currentBook, chapter);
 }
@@ -1546,7 +1589,7 @@ function updateBottomNavigationUI() {
 // Lógica de navegar para trás
 function navigatePrevChapter() {
   const bookIndex = BIBLE_BOOKS.findIndex(b => b.abbrev === state.currentBook);
-  
+
   if (state.currentChapter > 1) {
     state.currentChapter--;
   } else if (bookIndex > 0) {
@@ -1628,14 +1671,14 @@ function initVerseContextMenu() {
         state.highlights[state.activeVerseKey] = colorClass;
         if (verseEl) verseEl.classList.add(colorClass);
         showToast("Versículo destacado!", "success");
-        
+
         // Sincroniza com a nuvem
         if (typeof cloudSaveHighlight === "function") cloudSaveHighlight(state.activeVerseKey, colorClass);
       } else {
         // Remover destaque
         delete state.highlights[state.activeVerseKey];
         showToast("Destaque removido.", "success");
-        
+
         // Sincroniza com a nuvem
         if (typeof cloudSaveHighlight === "function") cloudSaveHighlight(state.activeVerseKey, "");
       }
@@ -1653,13 +1696,13 @@ function initVerseContextMenu() {
     if (index > -1) {
       state.favorites.splice(index, 1);
       showToast("Removido dos favoritos.", "success");
-      
+
       // Sincroniza com a nuvem
       if (typeof cloudSaveFavorite === "function") cloudSaveFavorite(state.activeVerseKey, false);
     } else {
       state.favorites.push(state.activeVerseKey);
       showToast("Adicionado aos favoritos!", "success");
-      
+
       // Sincroniza com a nuvem
       if (typeof cloudSaveFavorite === "function") cloudSaveFavorite(state.activeVerseKey, true);
     }
@@ -1681,10 +1724,10 @@ function initVerseContextMenu() {
     if (!state.activeVerseKey) return;
     const verseEl = document.querySelector(`.verse-item[data-verse-key="${state.activeVerseKey}"]`);
     const isCurrentlyRead = window.isVerseRead(state.activeVerseKey);
-    
+
     window.toggleVerseReadState(state.activeVerseKey, verseEl, !isCurrentlyRead);
     showToast(isCurrentlyRead ? "Versículo marcado como não lido." : "Versículo marcado como lido!", "success");
-    
+
     menu.style.display = "none";
   });
 
@@ -1696,7 +1739,7 @@ function initVerseContextMenu() {
     if (verseEl) {
       const textToCopy = verseEl.querySelector(".verse-text").textContent;
       const refText = getVerseReferenceText(state.activeVerseKey);
-      
+
       navigator.clipboard.writeText(`"${textToCopy}" (${refText})`).then(() => {
         showToast("Texto copiado para a área de transferência!", "success");
       }).catch(err => {
@@ -1725,7 +1768,7 @@ function initVerseContextMenu() {
 // Abre o menu flutuante em cima do versículo clicado
 function openVerseMenu(element, verseKey, verseNumber) {
   state.activeVerseKey = verseKey;
-  
+
   const menu = document.getElementById("verse-menu");
   menu.style.display = "flex";
 
@@ -1743,11 +1786,11 @@ function openVerseMenu(element, verseKey, verseNumber) {
 
   // Posicionar o menu próximo ao clique/elemento (PC)
   const rect = element.getBoundingClientRect();
-  
+
   // Obtém as dimensões do menu para cálculo
   const menuHeight = menu.offsetHeight;
   const menuWidth = menu.offsetWidth || 220;
-  
+
   // Calcular coordenadas relativas
   let top = rect.bottom + window.scrollY;
   let left = rect.left + window.scrollX;
@@ -1756,20 +1799,20 @@ function openVerseMenu(element, verseKey, verseNumber) {
   if (left + menuWidth > window.innerWidth) {
     left = window.innerWidth - menuWidth - 20;
   }
-  
+
   // Ajustar limites verticais para não esconder atrás da barra inferior (60px) ou fora da tela
   if (rect.bottom + menuHeight > window.innerHeight - 70) {
     // Posiciona o menu acima do versículo
     top = rect.top + window.scrollY - menuHeight - 5;
   }
-  
+
   // Nova verificação: se ao colocar acima, ele cortar no topo ou ficar sob o header (aprox 64px)
   const minTop = window.scrollY + 70;
   if (top < minTop) {
     // Trava o menu para que fique no mínimo logo abaixo do cabeçalho
     top = minTop;
   }
-  
+
   if (!asSheet) {
     menu.style.top = `${top}px`;
     menu.style.left = `${left}px`;
@@ -1794,7 +1837,7 @@ function openVerseMenu(element, verseKey, verseNumber) {
   // Atualizar dot ativa de cor
   const activeColor = state.highlights[verseKey];
   menu.querySelectorAll(".color-dot").forEach(dot => {
-    const isAct = (dot.getAttribute("data-color-class") === activeColor) || 
+    const isAct = (dot.getAttribute("data-color-class") === activeColor) ||
                   (!activeColor && !dot.getAttribute("data-color-class"));
     dot.classList.toggle("active", isAct);
   });
@@ -1824,19 +1867,19 @@ function addNoteButtonToVerse(verseElement, verseKey) {
 // Abre a gaveta de Marcadores & Notas já filtrada para exibir um versículo específico
 function openNotesDrawerFiltered(verseKey) {
   const refText = getVerseReferenceText(verseKey);
-  
+
   // Preencher o campo de busca com a referência do versículo
   const searchNotesInput = document.getElementById("search-notes-input");
   if (searchNotesInput) {
     searchNotesInput.value = refText;
   }
-  
+
   // Salvar a chave de filtro exato no estado
   state.activeFilterVerseKey = verseKey;
-  
+
   // Abrir a gaveta de favoritos/anotações
   openDrawer("favorites-drawer");
-  
+
   // Renderizar com o filtro já aplicado
   renderFavoritesAndNotes();
 }
@@ -1859,7 +1902,7 @@ async function openNoteEditor(verseKey) {
   await renderFavoritesAndNotes(); // lista atualizada abaixo do editor
 
   const listContainer = document.getElementById("annotations-container");
-  
+
   // Remover um editor anterior que ainda esteja aberto
   const previousEditor = document.getElementById("note-editor-card");
   if (previousEditor) previousEditor.remove();
@@ -1893,7 +1936,7 @@ async function openNoteEditor(verseKey) {
     const noteText = document.getElementById("note-textarea-input").value.trim();
     // Re-buscar o elemento do versículo no DOM (pode ter mudado)
     const currentVerseEl = document.querySelector(`.verse-item[data-verse-key="${verseKey}"]`);
-    
+
     if (noteText) {
       state.notes[verseKey] = noteText;
       if (currentVerseEl) {
@@ -1904,7 +1947,7 @@ async function openNoteEditor(verseKey) {
         }
       }
       showToast("Nota salva!", "success");
-      
+
       // Sincroniza nota com a nuvem
       if (typeof cloudSaveNote === "function") cloudSaveNote(verseKey, noteText);
     } else {
@@ -1916,7 +1959,7 @@ async function openNoteEditor(verseKey) {
         if (noteBtn) noteBtn.remove();
       }
       showToast("Nota excluída.", "success");
-      
+
       // Remove nota da nuvem
       if (typeof cloudSaveNote === "function") cloudSaveNote(verseKey, "");
     }
@@ -1932,16 +1975,16 @@ async function getVerseTextLocal(verseKey) {
   const bookAbbrev = parts[0];
   const chapterNum = parseInt(parts[1]);
   const verseNum = parseInt(parts[2]);
-  
+
   try {
     const v = String(state.currentTranslation || "nvi").toLowerCase();
     const globalVarName = `BIBLE_DATA_${v.toUpperCase()}`;
     let bibleData = window[globalVarName] || translationCache[v];
-    
+
     if (!bibleData) {
       bibleData = await ensureTranslationLoaded(v);
     }
-    
+
     const bookIndex = BIBLE_BOOKS.findIndex(b => b.abbrev.toLowerCase() === bookAbbrev.toLowerCase());
     if (bookIndex !== -1) {
       const text = getVerseTextFromData(bibleData, bookIndex, chapterNum, verseNum);
@@ -1957,20 +2000,20 @@ async function getVerseTextLocal(verseKey) {
 function compareVerseKeys(a, b) {
   const partsA = a.split("-");
   const partsB = b.split("-");
-  
+
   const indexA = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsA[0]);
   const indexB = BIBLE_BOOKS.findIndex(bk => bk.abbrev === partsB[0]);
-  
+
   if (indexA !== indexB) {
     return indexA - indexB;
   }
-  
+
   const chapA = parseInt(partsA[1]);
   const chapB = parseInt(partsB[1]);
   if (chapA !== chapB) {
     return chapA - chapB;
   }
-  
+
   const vA = parseInt(partsA[2]);
   const vB = parseInt(partsB[2]);
   return vA - vB;
@@ -1999,7 +2042,7 @@ async function renderFavoritesAndNotes() {
   if (allKeys.size === 0) {
     container.innerHTML = `
       <div style="text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 14px;">
-        Nenhum versículo destacado, favoritado ou com notas ainda. 
+        Nenhum versículo destacado, favoritado ou com notas ainda.
         <br/><br/>
         <small>Dica: Clique em qualquer versículo no leitor para marcá-lo.</small>
       </div>
@@ -2011,7 +2054,7 @@ async function renderFavoritesAndNotes() {
   const sortedKeys = Array.from(allKeys).sort(compareVerseKeys);
 
   const searchInput = document.getElementById("search-notes-input");
-  
+
   // Se o valor no input não for a referência do filtro ativo, limpamos o filtro de versículo específico
   if (state.activeFilterVerseKey) {
     const expectedRef = getVerseReferenceText(state.activeFilterVerseKey);
@@ -2044,9 +2087,9 @@ async function renderFavoritesAndNotes() {
       const refTextNorm = refText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const verseTextNorm = verseText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const noteTextNorm = noteText ? noteText.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : "";
-      
-      if (!refTextNorm.includes(filterVal) && 
-          !verseTextNorm.includes(filterVal) && 
+
+      if (!refTextNorm.includes(filterVal) &&
+          !verseTextNorm.includes(filterVal) &&
           !noteTextNorm.includes(filterVal)) {
         continue;
       }
@@ -2056,7 +2099,7 @@ async function renderFavoritesAndNotes() {
 
     const card = document.createElement("div");
     card.className = "annotation-card";
-    
+
     let highlightColorStyle = "";
     if (highlight === "hl-yellow") highlightColorStyle = "border-left-color: #eab308;";
     else if (highlight === "hl-green") highlightColorStyle = "border-left-color: #22c55e;";
@@ -2096,7 +2139,7 @@ async function renderFavoritesAndNotes() {
       state.currentBook = book;
       state.currentChapter = chapter;
       saveStateToLocalStorage();
-      
+
       loadActiveChapter().then(() => {
         setTimeout(() => scrollToVerse(verseNum), 300);
       });
@@ -2175,11 +2218,11 @@ async function executeBibleSearch() {
   try {
     // Garantir que a tradução foi carregada
     const bibleData = await ensureTranslationLoaded(state.currentTranslation);
-    
+
     // Realizar busca nos versículos
     const queryNorm = normalizeForSearch(query);
     const foundVerses = [];
-    
+
     bibleData.forEach((book, bookIdx) => {
       const bookMeta = BIBLE_BOOKS[bookIdx];
       book.chapters.forEach((chapter, chapIdx) => {
@@ -2198,12 +2241,12 @@ async function executeBibleSearch() {
         });
       });
     });
-    
+
     const searchData = {
       occurrence: foundVerses.length,
       verses: foundVerses
     };
-    
+
     renderSearchResults(searchData, query);
   } catch (error) {
     console.error("Erro ao realizar busca local:", error);
@@ -2247,7 +2290,7 @@ function renderSearchResults(data, query) {
   data.verses.slice(0, MAX_SEARCH_RESULTS).forEach(v => {
     const resultItem = document.createElement("div");
     resultItem.className = "search-result-item";
-    
+
     const bookName = v.book ? v.book.name : "Livro";
     const bookAbbrev = v.book ? v.book.abbrev : state.currentBook;
 
@@ -2261,7 +2304,7 @@ function renderSearchResults(data, query) {
       state.currentBook = bookAbbrev;
       state.currentChapter = v.chapter;
       saveStateToLocalStorage();
-      
+
       // Ao carregar, vamos focar no leitor
       loadActiveChapter().then(() => {
         // Tentar rolar para o versículo específico
@@ -2349,21 +2392,21 @@ async function exportNotesToMarkdown() {
   let mdContent = `# Bíblia Live - Minhas Anotações e Estudos\n`;
   mdContent += `Exportado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
   mdContent += `---\n\n`;
-  
+
   const favoritesList = [];
   const highlightsList = [];
   const notesList = [];
-  
+
   allKeys.forEach(verseKey => {
     const parts = verseKey.split("-"); // book-chapter-verse
     const bookMeta = BIBLE_BOOKS.find(b => b.abbrev === parts[0]);
     const bookName = bookMeta ? bookMeta.name : parts[0];
     const refText = `${bookName} ${parts[1]}:${parts[2]}`;
-    
+
     const isFav = state.favorites.includes(verseKey);
     const highlightColor = state.highlights[verseKey];
     const noteText = state.notes[verseKey];
-    
+
     const verseText = verseTexts.get(verseKey) || "";
 
     let itemText = `### ${refText} ${isFav ? '❤️' : ''}\n`;
@@ -2383,27 +2426,27 @@ async function exportNotesToMarkdown() {
       itemText += `* 📝 **Nota de Estudo**: ${noteText}\n`;
     }
     itemText += `\n`;
-    
+
     if (noteText) notesList.push(itemText);
     else if (isFav) favoritesList.push(itemText);
     else highlightsList.push(itemText);
   });
-  
+
   if (notesList.length > 0) {
     mdContent += `## 📝 Notas & Reflexões de Estudo\n\n`;
     mdContent += notesList.join("\n") + "\n";
   }
-  
+
   if (favoritesList.length > 0) {
     mdContent += `## ❤️ Versículos Favoritados\n\n`;
     mdContent += favoritesList.join("\n") + "\n";
   }
-  
+
   if (highlightsList.length > 0) {
     mdContent += `## 🎨 Versículos Destacados (Sem Notas)\n\n`;
     mdContent += highlightsList.join("\n") + "\n";
   }
-  
+
   // Criar download automático
   const blob = new Blob([mdContent], { type: "text/markdown;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -2413,7 +2456,7 @@ async function exportNotesToMarkdown() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  
+
   showToast("Estudos exportados com sucesso em Markdown!", "success");
 }
 
@@ -2441,7 +2484,7 @@ function renderReadingPlan() {
 
   const plan = window.READING_PLANS[planId];
   document.getElementById("active-plan-title").textContent = plan.name;
-  
+
   const descEl = document.getElementById("active-plan-description");
   if (descEl) {
     descEl.textContent = plan.description || "";
@@ -2467,7 +2510,7 @@ function renderReadingPlan() {
     const isCompleted = !!(state.readingPlans && state.readingPlans.progress && state.readingPlans.progress[`${planId}-${d.day}`]);
     const card = document.createElement("div");
     card.className = `reading-day-card ${isCompleted ? 'completed' : ''}`;
-    
+
     card.innerHTML = `
       <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
         <input type="checkbox" id="check-${escapeHTML(planId)}-${d.day}" ${isCompleted ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent-color);">
@@ -2492,12 +2535,12 @@ function renderReadingPlan() {
       state.readingPlans.progress[`${planId}-${d.day}`] = e.target.checked;
       saveStateToLocalStorage();
       renderReadingPlan();
-      
+
       // Sincroniza progresso do plano com a nuvem
       if (typeof cloudSaveReadingPlanDay === "function") {
         cloudSaveReadingPlanDay(planId, `${planId}-${d.day}`, e.target.checked);
       }
-      
+
       if (e.target.checked) {
         showToast(`Dia ${d.day} marcado como concluído!`, "success");
       } else {
@@ -2511,13 +2554,13 @@ function renderReadingPlan() {
       const book = btnGo.getAttribute("data-book");
       const chapter = parseInt(btnGo.getAttribute("data-chapter"));
       const label = btnGo.getAttribute("data-label");
-      
+
       state.currentBook = book;
       state.currentChapter = chapter;
       saveStateToLocalStorage();
       loadActiveChapter();
       closeAllDrawers();
-      
+
       showToast(`Navegado para ${label}`, "success");
     });
 
@@ -2528,10 +2571,10 @@ function renderReadingPlan() {
 function populatePlanSelect() {
   const planSelect = document.getElementById("plan-select");
   if (!planSelect) return;
-  
+
   const currentVal = planSelect.value;
   planSelect.innerHTML = '<option value="">-- Escolha um Plano --</option>';
-  
+
   if (window.READING_PLANS) {
     Object.keys(window.READING_PLANS).forEach(planId => {
       const plan = window.READING_PLANS[planId];
@@ -2541,11 +2584,11 @@ function populatePlanSelect() {
       planSelect.appendChild(opt);
     });
   }
-  
+
   if (window.READING_PLANS && window.READING_PLANS[currentVal]) {
     planSelect.value = currentVal;
   }
-  
+
   if (typeof updateCustomSelect === "function") {
     updateCustomSelect(planSelect);
   } else if (typeof syncCustomSelect === "function") {
@@ -2556,7 +2599,7 @@ function populatePlanSelect() {
 // Ouve as mudanças no select de planos
 document.addEventListener("DOMContentLoaded", () => {
   populatePlanSelect(); // Inicializa com os planos locais se houver
-  
+
   const planSelect = document.getElementById("plan-select");
   if (planSelect) {
     planSelect.addEventListener("change", (e) => {
