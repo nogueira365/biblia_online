@@ -3534,3 +3534,277 @@ textarea {
     display: none;
   }
 }
+
+/* ==========================================================================
+   Título do capítulo e navegação no celular
+   (barra de abas, seletor de livros em dois passos, painéis inferiores)
+   ========================================================================== */
+:root {
+  --mobile-tabbar-h: 0px;
+}
+
+/* Título: "Provérbios 28 [NVI]" + ações; no celular ganha ‹ › */
+.chapter-title-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.chapter-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-version-badge {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background-color: var(--bg-surface-hover);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.chapter-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.title-nav-btn,
+.picker-back,
+.mobile-tab-bar {
+  display: none;
+}
+
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+  :root {
+    --mobile-tabbar-h: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  /* Acima do fundo escurecido (10000): o painel "Mais" e o de traduções ficam dentro do cabeçalho */
+  header {
+    z-index: 10001;
+  }
+
+  /* ---------- Barra de abas ---------- */
+  .mobile-tab-bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--mobile-tabbar-h);
+    padding-bottom: env(safe-area-inset-bottom);
+    background-color: var(--bg-surface);
+    border-top: 1px solid var(--border-color);
+    z-index: 10001;
+  }
+
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tab-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tab-btn.active {
+    color: var(--accent-color);
+  }
+
+  /* A barra de abas substitui a barra Anterior/Livros/Próximo e o menu ☰ */
+  .bottom-nav-bar,
+  .mobile-actions-btn {
+    display: none !important;
+  }
+
+  .reader-pane {
+    padding-bottom: calc(var(--mobile-tabbar-h) + 40px);
+  }
+
+  .toast {
+    bottom: calc(var(--mobile-tabbar-h) + 16px);
+  }
+
+  /* Gavetas terminam acima da barra de abas, que continua visível */
+  .drawer {
+    bottom: var(--mobile-tabbar-h);
+  }
+
+  .cs-wrapper.cs-pill .cs-panel {
+    bottom: var(--mobile-tabbar-h);
+  }
+
+  /* ---------- Título: ‹ Provérbios 28 › ---------- */
+  .chapter-title-main {
+    gap: 0;
+    margin-left: -10px;
+  }
+
+  .title-nav-btn {
+    display: flex;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+  }
+
+  .title-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  /* A tradução já aparece no chip do cabeçalho */
+  .chapter-version-badge {
+    display: none;
+  }
+
+  /* ---------- Seletor de livros em tela cheia (dois passos) ---------- */
+  .sidebar-pane {
+    width: 100%;
+    left: -100%;
+    top: 64px;
+    bottom: var(--mobile-tabbar-h);
+    height: auto;
+    border-left: none;
+    box-shadow: none;
+  }
+
+  .sidebar-pane.open {
+    left: 0;
+  }
+
+  .book-item {
+    min-height: 48px;
+    font-size: 15px;
+  }
+
+  .group-title {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--bg-surface);
+  }
+
+  /* Passo 1: lista de livros */
+  .sidebar-pane .chapters-sidebar {
+    display: none;
+  }
+
+  /* Passo 2: capítulos do livro escolhido */
+  .sidebar-pane.show-chapters .sidebar-header,
+  .sidebar-pane.show-chapters .books-list {
+    display: none;
+  }
+
+  .sidebar-pane.show-chapters .chapters-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    border-top: none;
+  }
+
+  .sidebar-pane.show-chapters .chapters-grid {
+    flex: 1;
+    max-height: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    align-content: start;
+  }
+
+  .sidebar-pane.show-chapters .chapter-btn {
+    font-size: 16px;
+  }
+
+  .sidebar-pane.show-chapters .chapters-grid-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+  }
+
+  .picker-back {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    align-self: flex-start;
+    margin: 0 0 8px -6px;
+    padding: 6px 8px 6px 2px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: var(--accent-color);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ---------- Painel "Mais" (menu de ações do cabeçalho) ---------- */
+  .top-actions {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: var(--mobile-tabbar-h);
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding: 8px 12px 12px;
+    box-shadow: 0 -8px 30px var(--shadow-color);
+  }
+
+  /* Buscar e Notas já estão na barra de abas */
+  .top-actions #btn-search,
+  .top-actions #btn-favorites {
+    display: none;
+  }
+
+  .top-actions .btn-icon,
+  #btn-auth {
+    min-height: 48px;
+  }
+
+  /* ---------- Menu do versículo como painel inferior ---------- */
+  .verse-menu.as-sheet {
+    position: fixed;
+    top: auto !important;
+    left: 0 !important;
+    right: 0;
+    bottom: var(--mobile-tabbar-h);
+    width: auto;
+    padding: 12px 16px 16px;
+    border-radius: 16px 16px 0 0;
+    z-index: 10003;
+    gap: 2px;
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  }
+
+  .verse-menu.as-sheet .color-dots {
+    justify-content: space-around;
+    padding: 6px 4px 14px;
+    margin-bottom: 6px;
+  }
+
+  .verse-menu.as-sheet .menu-item {
+    min-height: 48px;
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+}

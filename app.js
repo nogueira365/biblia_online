@@ -468,6 +468,10 @@ function initUI() {
       renderVerseOfTheDay();
     }
 
+    // Anterior / próximo no título do capítulo
+    if (e.target.closest("#btn-title-prev")) navigatePrevChapter();
+    if (e.target.closest("#btn-title-next")) navigateNextChapter();
+
     // Compartilhar capítulo inteiro
     const shareChapterBtn = e.target.closest("#btn-share-chapter");
     if (shareChapterBtn) {
@@ -629,6 +633,41 @@ function initUI() {
     if (topActions && topActions.classList.contains("open")) {
       topActions.classList.remove("open");
     }
+    setActiveTab("ler");
+  });
+
+  // Barra de abas inferior (celular)
+  document.querySelectorAll("#mobile-tab-bar .tab-btn").forEach(tabBtn => {
+    tabBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tab = tabBtn.dataset.tab;
+      const sidebarOpen = document.querySelector(".sidebar-pane").classList.contains("open");
+      if (tab === "ler") {
+        closeAllDrawers();
+        closeBookPicker();
+      } else if (tab === "livros") {
+        if (sidebarOpen) closeBookPicker();
+        else openBookPicker();
+      } else if (tab === "buscar") {
+        document.getElementById("btn-search").click();
+        setTimeout(() => document.getElementById("search-input").focus(), 300);
+      } else if (tab === "notas") {
+        document.getElementById("btn-favorites").click();
+      } else if (tab === "mais") {
+        toggleMoreSheet();
+      }
+    });
+  });
+
+  // Seletor de livros: voltar da grade de capítulos para a lista
+  document.getElementById("btn-picker-back").addEventListener("click", () => {
+    document.querySelector(".sidebar-pane").classList.remove("show-chapters");
+  });
+
+  // Painel "Mais": escolher uma opção fecha o painel (a conta abre o próprio menu dentro dele)
+  document.querySelector(".top-actions").addEventListener("click", (e) => {
+    if (!isMobileLayout() || !e.target.closest(".btn-icon") || e.target.closest("#auth-header-container")) return;
+    toggleMoreSheet(false);
   });
 
   // Toggle do menu de ações (sanduíche direito) no mobile
@@ -646,8 +685,7 @@ function initUI() {
   if (btnCloseMobileActions) {
     btnCloseMobileActions.addEventListener("click", (e) => {
       e.stopPropagation();
-      const topActions = document.querySelector(".top-actions");
-      topActions.classList.remove("open");
+      toggleMoreSheet(false);
     });
   }
 
@@ -729,9 +767,77 @@ function closeAllDrawers() {
     `;
   }
   
-  // Se estiver no mobile, também fecha o sidebar
+  // Se estiver no mobile, também fecha o seletor de livros e o painel "Mais"
   if (isMobileLayout()) {
-    document.querySelector(".sidebar-pane").classList.remove("open");
+    const sidebar = document.querySelector(".sidebar-pane");
+    sidebar.classList.remove("open", "show-chapters");
+    document.querySelector(".top-actions").classList.remove("open");
+  }
+  setActiveTab("ler");
+}
+
+// Aba da barra inferior correspondente a cada gaveta
+const DRAWER_TABS = {
+  "search-drawer": "buscar",
+  "favorites-drawer": "notas",
+  "reading-plan-drawer": "mais",
+  "settings-drawer": "mais",
+  "profile-drawer": "mais"
+};
+
+// Destaca a aba ativa da barra inferior (celular)
+function setActiveTab(tab) {
+  document.querySelectorAll("#mobile-tab-bar .tab-btn").forEach(btn => {
+    const isActive = btn.dataset.tab === tab;
+    btn.classList.toggle("active", isActive);
+    if (isActive) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+}
+
+// Seletor de livros (celular): passo 1 = lista de livros, passo 2 = capítulos do livro escolhido
+function openBookPicker() {
+  closeAllDrawers();
+  const sidebar = document.querySelector(".sidebar-pane");
+  sidebar.classList.remove("show-chapters");
+  sidebar.classList.add("open");
+  document.getElementById("overlay").classList.add("active");
+  setActiveTab("livros");
+  const activeBook = sidebar.querySelector(".book-item.active");
+  if (activeBook) activeBook.scrollIntoView({ block: "center" });
+}
+
+function showPickerChapters(bookAbbrev) {
+  renderChaptersGrid(bookAbbrev);
+  const sidebar = document.querySelector(".sidebar-pane");
+  sidebar.classList.add("show-chapters");
+  sidebar.querySelector(".chapters-grid").scrollTop = 0;
+}
+
+function closeBookPicker() {
+  const sidebar = document.querySelector(".sidebar-pane");
+  sidebar.classList.remove("open", "show-chapters");
+  if (!document.querySelector(".drawer.open")) {
+    document.getElementById("overlay").classList.remove("active");
+  }
+  setActiveTab("ler");
+}
+
+// Painel "Mais" (celular): reaproveita o menu de ações do cabeçalho
+function toggleMoreSheet(forceOpen) {
+  const topActions = document.querySelector(".top-actions");
+  const open = forceOpen !== undefined ? forceOpen : !topActions.classList.contains("open");
+  if (open) {
+    closeAllDrawers();
+    topActions.classList.add("open");
+    document.getElementById("overlay").classList.add("active");
+    setActiveTab("mais");
+  } else {
+    topActions.classList.remove("open");
+    if (!document.querySelector(".drawer.open")) {
+      document.getElementById("overlay").classList.remove("active");
+      setActiveTab("ler");
+    }
   }
 }
 
@@ -740,6 +846,7 @@ function openDrawer(drawerId) {
   closeAllDrawers();
   document.getElementById(drawerId).classList.add("open");
   document.getElementById("overlay").classList.add("active");
+  setActiveTab(DRAWER_TABS[drawerId] || "ler");
 }
 
 // Mostra o Toast de notificação
@@ -804,7 +911,8 @@ function renderBooksList(filter = "") {
         <span class="book-meta">${book.chapters} cap.</span>
       `;
       bookEl.addEventListener("click", () => {
-        selectBook(book.abbrev);
+        if (isMobileLayout()) showPickerChapters(book.abbrev);
+        else selectBook(book.abbrev);
       });
       groupDiv.appendChild(bookEl);
     });
@@ -827,23 +935,25 @@ function selectBook(abbrev) {
   loadActiveChapter();
 }
 
-// Renderiza a grade de capítulos do livro ativo
-function renderChaptersGrid() {
+// Renderiza a grade de capítulos de um livro (padrão: o livro atual)
+function renderChaptersGrid(bookAbbrev = state.currentBook) {
   const grid = document.getElementById("chapters-grid");
   if (!grid) return;
 
   grid.innerHTML = "";
 
-  const bookData = BIBLE_BOOKS.find(b => b.abbrev === state.currentBook);
+  const bookData = BIBLE_BOOKS.find(b => b.abbrev === bookAbbrev);
   if (!bookData) return;
+  const isCurrentBook = bookAbbrev === state.currentBook;
 
   document.getElementById("chapters-grid-title").textContent = `Capítulos de ${bookData.name}`;
 
   for (let i = 1; i <= bookData.chapters; i++) {
     const btn = document.createElement("button");
-    btn.className = `chapter-btn ${i === state.currentChapter ? "active" : ""}`;
+    btn.className = `chapter-btn ${isCurrentBook && i === state.currentChapter ? "active" : ""}`;
     btn.textContent = i;
     btn.addEventListener("click", () => {
+      state.currentBook = bookAbbrev;
       state.currentChapter = i;
       saveStateToLocalStorage();
 
@@ -852,11 +962,8 @@ function renderChaptersGrid() {
 
       loadActiveChapter();
       
-      // No mobile, fecha o sidebar ao selecionar
-      if (isMobileLayout()) {
-        document.querySelector(".sidebar-pane").classList.remove("open");
-        document.getElementById("overlay").classList.remove("active");
-      }
+      // No mobile, fecha o seletor ao escolher o capítulo
+      if (isMobileLayout()) closeBookPicker();
     });
     grid.appendChild(btn);
   }
@@ -1065,13 +1172,17 @@ async function loadActiveChapter() {
     }
     
     chapterTitleEl.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 12px;">
-        <span>${bookData.name} ${state.currentChapter}</span>
-        <span style="font-size: 14px; font-weight: 500; color: var(--text-muted); background-color: var(--bg-surface-hover); padding: 4px 10px; border-radius: 4px;">
-          ${versionLabel}
-        </span>
+      <div class="chapter-title-main">
+        <button id="btn-title-prev" class="btn-icon title-nav-btn" aria-label="Capítulo anterior" title="Capítulo anterior">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <span class="chapter-title-text">${bookData.name} ${state.currentChapter}</span>
+        <button id="btn-title-next" class="btn-icon title-nav-btn" aria-label="Próximo capítulo" title="Próximo capítulo">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </button>
+        <span class="chapter-version-badge">${versionLabel}</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 4px;">
+      <div class="chapter-title-actions">
         <button id="btn-share-chapter" class="btn-icon" title="Compartilhar este capítulo" aria-label="Compartilhar capítulo">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
@@ -1384,6 +1495,11 @@ function updateBottomNavigationUI() {
     span.innerHTML = `<span class="nav-text-full">${fullText}</span><span class="nav-text-short">${shortText}</span>`;
   }
 
+  const titlePrev = document.getElementById("btn-title-prev");
+  const titleNext = document.getElementById("btn-title-next");
+  if (titlePrev) titlePrev.disabled = state.currentChapter === 1 && bookIndex === 0;
+  if (titleNext) titleNext.disabled = state.currentChapter === bookData.chapters && bookIndex === BIBLE_BOOKS.length - 1;
+
   // Anterior
   if (state.currentChapter === 1 && bookIndex === 0) {
     prevBtn.classList.add("disabled");
@@ -1613,7 +1729,19 @@ function openVerseMenu(element, verseKey, verseNumber) {
   const menu = document.getElementById("verse-menu");
   menu.style.display = "flex";
 
-  // Posicionar o menu próximo ao clique/elemento
+  // Título do menu: referência do versículo (ex.: "Salmos 23:1")
+  const menuTitle = menu.querySelector(".verse-menu-title");
+  if (menuTitle) menuTitle.textContent = getVerseReferenceText(verseKey);
+
+  // No celular o menu é um painel inferior (posição definida no CSS)
+  const asSheet = isMobileLayout();
+  menu.classList.toggle("as-sheet", asSheet);
+  if (asSheet) {
+    menu.style.top = "";
+    menu.style.left = "";
+  }
+
+  // Posicionar o menu próximo ao clique/elemento (PC)
   const rect = element.getBoundingClientRect();
   
   // Obtém as dimensões do menu para cálculo
@@ -1642,8 +1770,10 @@ function openVerseMenu(element, verseKey, verseNumber) {
     top = minTop;
   }
   
-  menu.style.top = `${top}px`;
-  menu.style.left = `${left}px`;
+  if (!asSheet) {
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+  }
 
   // Atualizar estado de "favorito" no botão do menu
   const isFav = state.favorites.includes(verseKey);
