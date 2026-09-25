@@ -10,7 +10,8 @@ const syncState = {
   currentUser: null,
   syncPendingCount: 0,
   isApproved: false,
-  isAdmin: false
+  isAdmin: false,
+  hasPendingChanges: false
 };
 
 let birthdatePicker = null;
@@ -69,80 +70,164 @@ function handlePasswordReset() {
 document.addEventListener("DOMContentLoaded", handlePasswordReset);
 
 // ----------------------------------------------------
+// Fila de sincronização (outbox)
+// Toda escrita na nuvem passa por uma fila persistida no localStorage.
+// Se a rede falhar, a operação fica guardada e é reenviada depois, na ordem original,
+// sempre antes de baixar dados da nuvem — assim alterações locais nunca são sobrescritas.
+// ----------------------------------------------------
+const SYNC_OUTBOX_KEY = "bible_sync_outbox";
+// Id do usuário dono dos dados locais. Ausente = dados anônimos (mesclados no primeiro login).
+const SYNC_OWNER_KEY = "bible_sync_owner";
+
+let outboxFlushPromise = null;
+
+function loadOutbox() {
+  try {
+    return JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveOutbox(ops) {
+  localStorage.setItem(SYNC_OUTBOX_KEY, JSON.stringify(ops));
+}
+
+// Limpa todos os dados locais que pertencem à conta (estado, fila e dono)
+function clearLocalUserData() {
+  localStorage.removeItem("bible_reader_state");
+  localStorage.removeItem(SYNC_OUTBOX_KEY);
+  localStorage.removeItem(SYNC_OWNER_KEY);
+}
+
+function canSyncWithCloud() {
+  return !!(supabase && syncState.isLoggedIn && syncState.currentUser);
+}
+
+// Erros que nunca se resolvem com nova tentativa (dado inválido, restrição violada, permissão/tabela)
+function isPermanentCloudError(error) {
+  return !!(error && typeof error.code === "string" && /^(22|23|42)/.test(error.code));
+}
+
+// Executa uma operação da fila. O Supabase não lança exceção: devolve { error }.
+async function runCloudOp(op, userId) {
+  const table = supabase.from(op.table);
+  let query;
+  if (op.action === "upsert") {
+    const rows = (op.rows || [op.row]).map(row => ({ ...row, user_id: userId }));
+    query = table.upsert(rows, { onConflict: op.onConflict });
+  } else if (op.action === "insert") {
+    query = table.insert({ ...op.row, user_id: userId });
+  } else if (op.action === "delete") {
+    query = table.delete().eq("user_id", userId);
+    Object.entries(op.match || {}).forEach(([column, value]) => {
+      query = query.eq(column, value);
+    });
+    if (op.like) query = query.like(op.like.column, op.like.pattern);
+  } else {
+    console.warn("Operação de sincronização desconhecida descartada:", op);
+    return;
+  }
+  const { error } = await query;
+  if (error) throw error;
+}
+
+// Envia as operações pendentes em ordem. Resolve true se a fila ficou vazia.
+function flushOutbox() {
+  if (!canSyncWithCloud()) return Promise.resolve(false);
+  if (outboxFlushPromise) return outboxFlushPromise;
+
+  const flushPromise = (async () => {
+    const userId = syncState.currentUser.id;
+    let ops = loadOutbox();
+    while (ops.length > 0) {
+      try {
+        await runCloudOp(ops[0], userId);
+      } catch (error) {
+        if (!isPermanentCloudError(error)) {
+          console.warn("Falha ao enviar alteração para a nuvem; ela ficará pendente:", error);
+          syncState.hasPendingChanges = true;
+          updateSyncIndicator("pending");
+          return false;
+        }
+        // Reenviar não adiantaria: descarta para não travar a fila
+        console.error("Alteração rejeitada pelo servidor e descartada:", ops[0], error);
+        showToast("Uma alteração foi rejeitada pelo servidor: " + (error.message || error.code), "error");
+      }
+      // Relê a fila: novas operações podem ter entrado durante o envio
+      ops = loadOutbox().slice(1);
+      saveOutbox(ops);
+    }
+    if (syncState.hasPendingChanges) {
+      syncState.hasPendingChanges = false;
+      updateSyncIndicator("online");
+    }
+    return true;
+  })();
+
+  // Libera a trava ao terminar. Não usar finally dentro da função: com a fila vazia ela
+  // termina de forma síncrona, antes da atribuição abaixo, e a trava ficaria presa para sempre.
+  outboxFlushPromise = flushPromise;
+  const release = () => {
+    if (outboxFlushPromise === flushPromise) outboxFlushPromise = null;
+  };
+  flushPromise.then(release, release);
+  return flushPromise;
+}
+
+// Enfileira operações e tenta enviá-las. Resolve true se tudo chegou à nuvem.
+function cloudWrite(...ops) {
+  if (!supabase) return Promise.resolve(false);
+  // Sem conta vinculada os dados são apenas locais; serão mesclados no primeiro login
+  if (!syncState.isLoggedIn && !localStorage.getItem(SYNC_OWNER_KEY)) return Promise.resolve(false);
+  saveOutbox(loadOutbox().concat(ops));
+  return flushOutbox();
+}
+
+// ----------------------------------------------------
 // Funções individuais de salvamento para confirmação de leitura
 // ----------------------------------------------------
-async function cloudSaveReadVerse(verseKey, isAdding) {
-  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
-  try {
-    if (isAdding) {
-      await supabase.from("read_verses").upsert({
-        user_id: syncState.currentUser.id,
-        verse_key: verseKey
-      }, { onConflict: "user_id,verse_key" });
-    } else {
-      await supabase.from("read_verses")
-        .delete()
-        .match({ user_id: syncState.currentUser.id, verse_key: verseKey });
-    }
-  } catch (error) {
-    console.error("Erro ao sincronizar versículo lido:", error);
-  }
+function cloudSaveReadVerse(verseKey, isAdding) {
+  return cloudWrite(isAdding
+    ? { table: "read_verses", action: "upsert", onConflict: "user_id,verse_key", row: { verse_key: verseKey } }
+    : { table: "read_verses", action: "delete", match: { verse_key: verseKey } });
 }
 
-async function cloudSaveReadBook(bookKey, isAdding) {
-  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
-  try {
-    if (isAdding) {
-      await supabase.from("read_books").upsert({
-        user_id: syncState.currentUser.id,
-        book_key: bookKey
-      }, { onConflict: "user_id,book_key" });
-    } else {
-      await supabase.from("read_books")
-        .delete()
-        .match({ user_id: syncState.currentUser.id, book_key: bookKey });
-      
-      // Também desmarca todos os capítulos vinculados ao livro
-      await supabase.from("read_chapters")
-        .delete()
-        .eq("user_id", syncState.currentUser.id)
-        .like("chapter_key", `${bookKey}-%`);
-    }
-  } catch (error) {
-    console.error("Erro ao sincronizar livro lido:", error);
-  }
+// Marca vários versículos como lidos numa única requisição
+function cloudSaveReadVerses(verseKeys) {
+  if (!verseKeys || verseKeys.length === 0) return Promise.resolve(true);
+  return cloudWrite({
+    table: "read_verses",
+    action: "upsert",
+    onConflict: "user_id,verse_key",
+    rows: verseKeys.map(key => ({ verse_key: key }))
+  });
 }
 
-async function cloudSaveReadChapter(chapterKey, isAdding) {
-  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
-  try {
-    if (isAdding) {
-      await supabase.from("read_chapters").upsert({
-        user_id: syncState.currentUser.id,
-        chapter_key: chapterKey
-      }, { onConflict: "user_id,chapter_key" });
-    } else {
-      await supabase.from("read_chapters")
-        .delete()
-        .match({ user_id: syncState.currentUser.id, chapter_key: chapterKey });
-    }
-  } catch (error) {
-    console.error("Erro ao sincronizar capítulo lido:", error);
+function cloudSaveReadBook(bookKey, isAdding) {
+  if (isAdding) {
+    return cloudWrite({ table: "read_books", action: "upsert", onConflict: "user_id,book_key", row: { book_key: bookKey } });
   }
+  // Também desmarca todos os capítulos vinculados ao livro
+  return cloudWrite(
+    { table: "read_books", action: "delete", match: { book_key: bookKey } },
+    { table: "read_chapters", action: "delete", like: { column: "chapter_key", pattern: `${bookKey}-%` } }
+  );
 }
 
-async function cloudSaveReadingPlanDay(planId, dayKey, isCompleted) {
-  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
-  try {
-    await supabase.from("reading_plans").upsert({
-      user_id: syncState.currentUser.id,
-      plan_id: planId,
-      day_key: dayKey,
-      completed: isCompleted
-    }, { onConflict: "user_id,plan_id,day_key" });
-  } catch (error) {
-    console.error("Erro ao sincronizar progresso do plano:", error);
-  }
+function cloudSaveReadChapter(chapterKey, isAdding) {
+  return cloudWrite(isAdding
+    ? { table: "read_chapters", action: "upsert", onConflict: "user_id,chapter_key", row: { chapter_key: chapterKey } }
+    : { table: "read_chapters", action: "delete", match: { chapter_key: chapterKey } });
+}
+
+function cloudSaveReadingPlanDay(planId, dayKey, isCompleted) {
+  return cloudWrite({
+    table: "reading_plans",
+    action: "upsert",
+    onConflict: "user_id,plan_id,day_key",
+    row: { plan_id: planId, day_key: dayKey, completed: isCompleted }
+  });
 }
 
 async function fetchReadingPlansCatalog() {
@@ -422,10 +507,17 @@ function initAuthUI() {
 
   // Logout (Sair)
   if (btnLogout) {
-    btnLogout.addEventListener("click", () => {
+    btnLogout.addEventListener("click", async () => {
+      // Tentar enviar alterações pendentes antes de apagar os dados locais
+      const flushed = await flushOutbox();
+      if (!flushed && loadOutbox().length > 0) {
+        const confirmed = confirm("Algumas alterações ainda não foram enviadas para a nuvem e serão perdidas ao sair.\n\nDeseja sair mesmo assim?");
+        if (!confirmed) return;
+      }
+
       // Limpeza forçada na memória local
-      localStorage.removeItem("bible_reader_state");
-      
+      clearLocalUserData();
+
       // Feedback visual rápido
       if (typeof showToast === "function") showToast("Saindo da conta...", "success");
       
@@ -445,8 +537,7 @@ function initAuthUI() {
     btnSyncNow.addEventListener("click", async () => {
       if (syncState.isLoggedIn) {
         try {
-          updateSyncIndicator("working");
-          await syncCloudData(true);
+          await syncCloudData();
           showToast("Sincronização em nuvem concluída!", "success");
         } catch (error) {
           console.error("Erro na sincronização:", error);
@@ -619,15 +710,11 @@ function initAuthUI() {
       }
       
       if (syncState.isLoggedIn) {
-        try {
-          updateSyncIndicator("working");
-          await cloudSavePreferences();
-          updateSyncIndicator("online");
+        const synced = await cloudSavePreferences();
+        if (synced) {
           showToast("Perfil atualizado com sucesso!", "success");
-        } catch (error) {
-          console.error("Erro ao salvar dados do perfil:", error);
-          showToast("Erro: " + (error.message || "Erro ao sincronizar dados com o Supabase."), "error");
-          updateSyncIndicator("offline");
+        } else {
+          showToast("Perfil salvo. Ele será enviado à nuvem quando a conexão voltar.", "error");
         }
       } else {
         showToast("Perfil salvo localmente!", "success");
@@ -713,18 +800,15 @@ function initAuthUI() {
             updateSyncIndicator("working");
             const userId = syncState.currentUser.id;
             
-            // Deletar do banco de dados (ignoramos erros de foreign key por causa das policies se houver)
-            await supabase.from("highlights").delete().eq("user_id", userId);
-            await supabase.from("notes").delete().eq("user_id", userId);
-            await supabase.from("favorites").delete().eq("user_id", userId);
-            await supabase.from("read_verses").delete().eq("user_id", userId);
-            await supabase.from("read_chapters").delete().eq("user_id", userId);
-            await supabase.from("read_books").delete().eq("user_id", userId);
-            await supabase.from("reading_plans").delete().eq("user_id", userId);
-            await supabase.from("reading_history").delete().eq("user_id", userId);
-            
-            // Limpar dados locais
-            localStorage.removeItem("bible_reader_state");
+            // Deletar do banco de dados (o Supabase devolve { error } em vez de lançar exceção)
+            const tables = ["highlights", "notes", "favorites", "read_verses", "read_chapters", "read_books", "reading_plans", "reading_history"];
+            for (const table of tables) {
+              const { error } = await supabase.from(table).delete().eq("user_id", userId);
+              if (error) throw error;
+            }
+
+            // Limpar dados locais (inclusive alterações pendentes, que recriariam os dados)
+            clearLocalUserData();
             
             alert("Todos os seus dados foram apagados com sucesso.");
             window.location.reload();
@@ -735,7 +819,7 @@ function initAuthUI() {
           }
         } else {
           // Apenas local
-          localStorage.removeItem("bible_reader_state");
+          clearLocalUserData();
           alert("Todos os seus dados locais foram apagados.");
           window.location.reload();
         }
@@ -752,8 +836,6 @@ function processAndSaveAvatar(file) {
     showToast("Por favor, selecione uma imagem válida.", "error");
     return;
   }
-
-  updateSyncIndicator("working");
 
   const reader = new FileReader();
   reader.onload = (event) => {
@@ -797,13 +879,12 @@ function processAndSaveAvatar(file) {
 
       // Envia para a nuvem
       if (syncState.isLoggedIn) {
-        cloudSavePreferences().then(() => {
-          updateSyncIndicator("online");
-          showToast("Foto de perfil atualizada!", "success");
-        }).catch(err => {
-          console.error("Erro ao salvar foto de perfil no Supabase:", err);
-          showToast("Erro ao sincronizar foto de perfil.", "error");
-          updateSyncIndicator("online");
+        cloudSavePreferences().then(synced => {
+          if (synced) {
+            showToast("Foto de perfil atualizada!", "success");
+          } else {
+            showToast("Foto salva. Ela será enviada à nuvem quando a conexão voltar.", "error");
+          }
         });
       } else {
         updateSyncIndicator("offline");
@@ -820,62 +901,76 @@ function processAndSaveAvatar(file) {
 function listenToAuthChanges() {
   if (!supabase) return;
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log(`Evento de Auth: ${event}`);
-    
-    if (session) {
-      syncState.isLoggedIn = true;
-      syncState.currentUser = session.user;
-      syncState.isAdmin = (session.user.email === ADMIN_EMAIL);
-      
-      // Atualizar UI do cabeçalho
-      if (typeof updateGreeting === "function") {
-        updateGreeting();
-      } else {
-        const userEmailEl = document.getElementById("user-email");
-        if (userEmailEl) userEmailEl.textContent = session.user.email;
-      }
-      
-      const btnAuth = document.getElementById("btn-auth");
-      if (btnAuth) btnAuth.title = `Conectado como ${session.user.email}`;
-
-      updateSyncIndicator("working");
-      
-      try {
-        // Cadastro direto: sem necessidade de aprovação
-        syncState.isApproved = true;
-        hidePendingScreen();
-        
-        // Sincronizar / Carregar dados da nuvem
-        await syncCloudData(false);
-        updateSyncIndicator("online");
-        // Como não há mais aprovações, não mostramos mais o botão admin
-        hideAdminButton();
-      } catch (err) {
-        console.error("Erro durante o carregamento de dados após login:", err);
-        updateSyncIndicator("offline");
-      }
-    } else {
-      syncState.isLoggedIn = false;
-      syncState.currentUser = null;
-      syncState.isApproved = false;
-      syncState.isAdmin = false;
-      
-      const btnAuth = document.getElementById("btn-auth");
-      if (btnAuth) btnAuth.title = "Entrar / Criar Conta";
-
-      updateSyncIndicator("offline");
-      hidePendingScreen();
-      hideAdminButton();
-      
-      // Se acabou de deslogar (SIGNED_OUT), recarregar a página para limpar o estado em memória
-      if (event === "SIGNED_OUT") {
-        // Limpar dados locais que pertenciam à conta
-        localStorage.removeItem("bible_reader_state");
-        window.location.reload();
-      }
-    }
+  supabase.auth.onAuthStateChange((event, session) => {
+    // Não usar await aqui: chamar o Supabase dentro deste callback pode travar o SDK (deadlock).
+    // O trabalho é despachado para fora do callback.
+    setTimeout(() => handleAuthEvent(event, session), 0);
   });
+
+  // Ao recuperar a conexão, reenviar alterações pendentes
+  window.addEventListener("online", () => {
+    if (canSyncWithCloud()) flushOutbox();
+  });
+}
+
+// Usuário cujos dados já foram sincronizados nesta sessão da página
+let lastSyncedUserId = null;
+
+async function handleAuthEvent(event, session) {
+  console.log(`Evento de Auth: ${event}`);
+
+  if (session) {
+    syncState.isLoggedIn = true;
+    syncState.currentUser = session.user;
+    syncState.isAdmin = (session.user.email === ADMIN_EMAIL);
+
+    // Atualizar UI do cabeçalho
+    if (typeof updateGreeting === "function") {
+      updateGreeting();
+    } else {
+      const userEmailEl = document.getElementById("user-email");
+      if (userEmailEl) userEmailEl.textContent = session.user.email;
+    }
+
+    const btnAuth = document.getElementById("btn-auth");
+    if (btnAuth) btnAuth.title = `Conectado como ${session.user.email}`;
+
+    // TOKEN_REFRESHED, USER_UPDATED e o SIGNED_IN reemitido ao voltar para a aba
+    // não exigem nova sincronização completa: só reenvia o que estiver pendente.
+    if (lastSyncedUserId === session.user.id) {
+      flushOutbox();
+      return;
+    }
+    lastSyncedUserId = session.user.id;
+
+    // Cadastro direto: sem necessidade de aprovação
+    syncState.isApproved = true;
+    hidePendingScreen();
+
+    try {
+      await syncCloudData();
+    } catch (err) {
+      console.error("Erro durante o carregamento de dados após login:", err);
+    }
+  } else {
+    lastSyncedUserId = null;
+    syncState.isLoggedIn = false;
+    syncState.currentUser = null;
+    syncState.isApproved = false;
+    syncState.isAdmin = false;
+
+    const btnAuth = document.getElementById("btn-auth");
+    if (btnAuth) btnAuth.title = "Entrar / Criar Conta";
+
+    updateSyncIndicator("offline");
+    hidePendingScreen();
+
+    // Se acabou de deslogar (SIGNED_OUT), recarregar a página para limpar o estado em memória
+    if (event === "SIGNED_OUT") {
+      clearLocalUserData();
+      window.location.reload();
+    }
+  }
 }
 
 // Atualiza a cor e o status do indicador de sincronização visual
@@ -889,15 +984,19 @@ function updateSyncIndicator(status) {
   if (status === "online") {
     indicator.classList.add("sync-online");
     indicator.title = "Conectado e Sincronizado";
-    if (statusLabel) statusLabel.innerHTML = "🟢 Sincronizado";
+    if (statusLabel) statusLabel.textContent = "🟢 Sincronizado";
   } else if (status === "working") {
     indicator.classList.add("sync-working");
     indicator.title = "Sincronizando com a nuvem...";
-    if (statusLabel) statusLabel.innerHTML = "🟡 Sincronizando...";
+    if (statusLabel) statusLabel.textContent = "🟡 Sincronizando...";
+  } else if (status === "pending") {
+    indicator.classList.add("sync-working");
+    indicator.title = "Alterações pendentes de envio";
+    if (statusLabel) statusLabel.textContent = "🟠 Alterações pendentes (sem conexão)";
   } else {
     indicator.classList.add("sync-offline");
     indicator.title = "Modo Local / Desconectado";
-    if (statusLabel) statusLabel.innerHTML = "⚫ Modo Local / Desconectado";
+    if (statusLabel) statusLabel.textContent = "⚫ Modo Local / Desconectado";
   }
 }
 
@@ -905,272 +1004,237 @@ function updateSyncIndicator(status) {
 // FUNÇÕES DE SINCRONIZAÇÃO DE DADOS COM O SUPABASE
 // ==========================================================================
 
-// Sincroniza dados empurrando itens locais do LocalStorage (se solicitado) e puxando dados da nuvem
-async function syncCloudData(pushLocal = false) {
-  if (!supabase || !syncState.currentUser) return;
-  const userId = syncState.currentUser.id;
+let syncInFlight = null;
 
-  // 1. Obter o estado local da aplicação
+// Sincroniza com a nuvem: mescla dados anônimos (primeiro login), envia a fila pendente
+// e só então baixa o estado da nuvem. Lança erro se não conseguir concluir.
+function syncCloudData() {
+  if (!supabase || !syncState.currentUser) return Promise.resolve();
   // NOTA: 'state' é a variável global de estado definida em app.js
-  if (typeof state === "undefined") return;
+  if (typeof state === "undefined") return Promise.resolve();
+  if (syncInFlight) return syncInFlight;
 
-  try {
-    updateSyncIndicator("syncing");
-
-    // 2. Mesclar dados locais de localStorage para a nuvem
-    // Se o usuário já tiver dados no LocalStorage antes de logar, nós fazemos o upload deles.
-    if (pushLocal) {
-      await uploadLocalDataToCloud(userId);
-    }
-
-    // 3. Puxar todos os dados mais recentes do Supabase para o estado local
-    await pullDataFromCloud(userId);
-
-    // 4. Salvar estado atualizado no LocalStorage e recarregar componentes visuais
-    if (typeof saveStateToLocalStorage === "function") {
-      saveStateToLocalStorage();
-    }
-    
-    // Atualizar UI ativa
-    if (typeof loadActiveChapter === "function") {
-      await loadActiveChapter();
-    }
-    
-    // Se o painel de favoritos/anotações estiver aberto, renderizar novamente
-    const favDrawer = document.getElementById("favorites-drawer");
-    if (favDrawer && favDrawer.classList.contains("open") && typeof renderFavoritesAndNotes === "function") {
-      renderFavoritesAndNotes();
-    }
-    // Atualizar planos de leitura se abertos
-    const planDrawer = document.getElementById("reading-plan-drawer");
-    if (planDrawer && planDrawer.classList.contains("open") && typeof renderReadingPlan === "function") {
-      renderReadingPlan();
-    }
-    
-    updateSyncIndicator("online");
-  } catch (error) {
-    console.error("Falha ao sincronizar dados com o Supabase:", error);
-    updateSyncIndicator("offline");
-    throw error;
-  }
-}
-
-// Envia dados salvos localmente (Highlights, Notes, Favorites, History, Plans) para a nuvem
-async function uploadLocalDataToCloud(userId) {
-  // Verifica se o objeto state existe e tem alguma informação minimamente relevante
-  // para evitar enviar um objeto vazio (ex: após limpeza de cache/logout)
-  if (!state || Object.keys(state).length === 0) return;
-
-  // Highlights
-  if (state.highlights && Object.keys(state.highlights).length > 0) {
-    const rows = Object.entries(state.highlights).map(([key, val]) => ({
-      user_id: userId,
-      verse_key: key,
-      color_class: val
-    }));
-    await supabase.from("highlights").upsert(rows, { onConflict: "user_id,verse_key" });
-  }
-
-  // Notas
-  if (state.notes && Object.keys(state.notes).length > 0) {
-    const rows = Object.entries(state.notes).map(([key, val]) => ({
-      user_id: userId,
-      verse_key: key,
-      content: val
-    }));
-    await supabase.from("notes").upsert(rows, { onConflict: "user_id,verse_key" });
-  }
-
-  // Favoritos
-  if (state.favorites && state.favorites.length > 0) {
-    const rows = state.favorites.map(key => ({
-      user_id: userId,
-      verse_key: key
-    }));
-    await supabase.from("favorites").upsert(rows, { onConflict: "user_id,verse_key" });
-  }
-
-  // Versículos Lidos
-  if (state.readStatus && state.readStatus.verses && state.readStatus.verses.length > 0) {
-    const rows = state.readStatus.verses.map(key => ({
-      user_id: userId,
-      verse_key: key
-    }));
-    await supabase.from("read_verses").upsert(rows, { onConflict: "user_id,verse_key" });
-  }
-
-  // Capítulos Lidos
-  if (state.readStatus && state.readStatus.chapters && state.readStatus.chapters.length > 0) {
-    const rows = state.readStatus.chapters.map(key => ({
-      user_id: userId,
-      chapter_key: key
-    }));
-    await supabase.from("read_chapters").upsert(rows, { onConflict: "user_id,chapter_key" });
-  }
-
-  // Livros Lidos
-  if (state.readStatus && state.readStatus.books && state.readStatus.books.length > 0) {
-    const rows = state.readStatus.books.map(key => ({
-      user_id: userId,
-      book_key: key
-    }));
-    await supabase.from("read_books").upsert(rows, { onConflict: "user_id,book_key" });
-  }
-
-  // Progresso dos Planos de Leitura
-  if (state.readingPlans && state.readingPlans.progress) {
-    const progressEntries = Object.entries(state.readingPlans.progress);
-    if (progressEntries.length > 0) {
-      const rows = progressEntries.map(([key, val]) => {
-        // A chave no localstorage é 'planId-dayNumber', e salvamos se está completed (boolean)
-        const lastDashIndex = key.lastIndexOf("-");
-        const planId = lastDashIndex > 0 ? key.substring(0, lastDashIndex) : key;
-        return {
-          user_id: userId,
-          plan_id: planId,
-          day_key: key,
-          completed: !!val
-        };
-      });
-      await supabase.from("reading_plans").upsert(rows, { onConflict: "user_id,plan_id,day_key" });
-    }
-  }
-
-  // Histórico
-  if (state.history && state.history.length > 0) {
-    const rows = state.history.map(item => ({
-      user_id: userId,
-      book_code: item.book,
-      chapter: item.chapter,
-      read_at: item.time || new Date().toISOString()
-    }));
-    await supabase.from("reading_history").upsert(rows);
-  }
-  
-  // NOTA: As preferências do usuário (user_preferences) NÃO devem ser enviadas 
-  // automaticamente aqui, pois isso sobrescreveria os dados da nuvem com dados 
-  // locais vazios se o usuário acessar de um novo dispositivo ou limpar o cache.
-  // As preferências só são enviadas via cloudSavePreferences() quando o usuário clica em Salvar.
-}
-
-// Salva apenas as preferências e dados do perfil na nuvem
-async function cloudSavePreferences() {
-  if (!supabase || !syncState.isLoggedIn || !syncState.currentUser) return;
   const userId = syncState.currentUser.id;
-  
-  const { error } = await supabase.from("user_preferences").upsert({
-    user_id: userId,
-    theme: state.theme,
-    font_family: state.fontFamily,
-    font_size: state.fontSize,
-    current_translation: state.currentTranslation,
-    avatar_url: state.avatarUrl || null,
-    full_name: state.fullName || null,
-    bio: state.bio || null,
-    social_name: state.socialName || null,
-    birth_date: state.birthDate || null,
-    marital_status: state.maritalStatus || null,
-    gender: state.gender || null
-  }, { onConflict: "user_id" });
-  
-  if (error) {
-    console.error("Erro no Upsert de preferências:", error);
-    throw error;
+
+  const syncPromise = (async () => {
+    updateSyncIndicator("working");
+    try {
+      const owner = localStorage.getItem(SYNC_OWNER_KEY);
+      if (owner !== userId) {
+        if (owner) {
+          // Dados locais de outra conta: a fila dela não pode ir para esta conta
+          saveOutbox([]);
+        } else {
+          // Dados criados sem login: mescla com a nuvem uma única vez
+          await uploadLocalDataToCloud(userId);
+        }
+        localStorage.setItem(SYNC_OWNER_KEY, userId);
+      }
+
+      // Nunca baixar da nuvem com alterações locais ainda não enviadas
+      const flushed = await flushOutbox();
+      if (!flushed) {
+        throw new Error("Existem alterações locais pendentes que não puderam ser enviadas.");
+      }
+
+      await pullDataFromCloud(userId);
+
+      if (typeof saveStateToLocalStorage === "function") {
+        saveStateToLocalStorage();
+      }
+      await refreshUIAfterSync();
+
+      updateSyncIndicator("online");
+    } catch (error) {
+      console.error("Falha ao sincronizar dados com o Supabase:", error);
+      updateSyncIndicator(loadOutbox().length > 0 ? "pending" : "offline");
+      throw error;
+    }
+  })();
+
+  // Mesma trava de flushOutbox: liberada só depois da atribuição
+  syncInFlight = syncPromise;
+  const release = () => {
+    if (syncInFlight === syncPromise) syncInFlight = null;
+  };
+  syncPromise.then(release, release);
+  return syncPromise;
+}
+
+// Re-renderiza a interface com os dados baixados, preservando a posição de leitura
+async function refreshUIAfterSync() {
+  const translationSelect = document.getElementById("translation-select");
+  if (translationSelect && translationSelect.value !== state.currentTranslation) {
+    translationSelect.value = state.currentTranslation;
+    if (typeof syncCustomSelect === "function") syncCustomSelect(translationSelect);
+  }
+
+  if (typeof loadActiveChapter === "function") {
+    const readerPane = document.getElementById("reader-pane");
+    const previousScroll = readerPane ? readerPane.scrollTop : 0;
+    await loadActiveChapter();
+    if (readerPane) readerPane.scrollTop = previousScroll;
+  }
+
+  // Se o painel de favoritos/anotações estiver aberto, renderizar novamente
+  const favDrawer = document.getElementById("favorites-drawer");
+  if (favDrawer && favDrawer.classList.contains("open") && typeof renderFavoritesAndNotes === "function") {
+    renderFavoritesAndNotes();
+  }
+  // Atualizar planos de leitura se abertos
+  const planDrawer = document.getElementById("reading-plan-drawer");
+  if (planDrawer && planDrawer.classList.contains("open") && typeof renderReadingPlan === "function") {
+    renderReadingPlan();
   }
 }
 
-// Puxa os dados da nuvem para preencher o estado local da aplicação
+// Upsert em lotes, verificando o erro de cada lote
+async function upsertInChunks(table, rows, onConflict) {
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const { error } = await supabase.from(table).upsert(rows.slice(i, i + CHUNK_SIZE), { onConflict });
+    if (error) throw error;
+  }
+}
+
+// Envia para a nuvem os dados criados sem login (Highlights, Notes, Favorites, Leituras, Planos).
+// Usado apenas no primeiro login do aparelho; depois disso toda alteração passa pela fila.
+async function uploadLocalDataToCloud(userId) {
+  if (!state) return;
+
+  const readStatus = state.readStatus || {};
+  const progress = (state.readingPlans && state.readingPlans.progress) || {};
+
+  await upsertInChunks("highlights",
+    Object.entries(state.highlights || {}).map(([key, val]) => ({ user_id: userId, verse_key: key, color_class: val })),
+    "user_id,verse_key");
+
+  await upsertInChunks("notes",
+    Object.entries(state.notes || {}).map(([key, val]) => ({ user_id: userId, verse_key: key, content: val })),
+    "user_id,verse_key");
+
+  await upsertInChunks("favorites",
+    (state.favorites || []).map(key => ({ user_id: userId, verse_key: key })),
+    "user_id,verse_key");
+
+  await upsertInChunks("read_verses",
+    (readStatus.verses || []).map(key => ({ user_id: userId, verse_key: key })),
+    "user_id,verse_key");
+
+  await upsertInChunks("read_chapters",
+    (readStatus.chapters || []).map(key => ({ user_id: userId, chapter_key: key })),
+    "user_id,chapter_key");
+
+  await upsertInChunks("read_books",
+    (readStatus.books || []).map(key => ({ user_id: userId, book_key: key })),
+    "user_id,book_key");
+
+  // A chave no localStorage é 'planId-dayNumber', e salvamos se está completed (boolean)
+  await upsertInChunks("reading_plans",
+    Object.entries(progress).map(([key, val]) => {
+      const lastDashIndex = key.lastIndexOf("-");
+      const planId = lastDashIndex > 0 ? key.substring(0, lastDashIndex) : key;
+      return { user_id: userId, plan_id: planId, day_key: key, completed: !!val };
+    }),
+    "user_id,plan_id,day_key");
+
+  // NOTA: O histórico não é enviado (não tem chave única e geraria duplicatas), e as
+  // preferências (user_preferences) também não: isso sobrescreveria o perfil da nuvem
+  // com dados locais vazios num aparelho novo. Elas vão via cloudSavePreferences().
+}
+
+// Tamanho de página das consultas. O Supabase limita cada resposta a 1000 linhas (max_rows).
+const CLOUD_PAGE_SIZE = 1000;
+
+// Busca todas as linhas do usuário numa tabela, paginando além do limite do servidor
+async function fetchAllUserRows(table, columns, userId) {
+  const rows = [];
+  for (let from = 0; ; from += CLOUD_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .eq("user_id", userId)
+      .order("id")
+      .range(from, from + CLOUD_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < CLOUD_PAGE_SIZE) return rows;
+  }
+}
+
+// Puxa os dados da nuvem para preencher o estado local da aplicação.
+// Tudo é baixado antes de alterar o estado: se qualquer consulta falhar, o estado local fica intacto.
 async function pullDataFromCloud(userId) {
-  // 1. Buscar Marcações (Highlights)
-  const { data: highlights } = await supabase.from("highlights").select("verse_key, color_class").eq("user_id", userId).limit(50000);
+  const [
+    highlights, notes, favorites, readVerses, readChapters, readBooks, plans, historyResult, prefResult
+  ] = await Promise.all([
+    fetchAllUserRows("highlights", "verse_key, color_class", userId),
+    fetchAllUserRows("notes", "verse_key, content", userId),
+    fetchAllUserRows("favorites", "verse_key", userId),
+    fetchAllUserRows("read_verses", "verse_key", userId),
+    fetchAllUserRows("read_chapters", "chapter_key", userId),
+    fetchAllUserRows("read_books", "book_key", userId),
+    fetchAllUserRows("reading_plans", "plan_id, day_key, completed", userId),
+    // Histórico ordenado pelo lido mais recentemente
+    supabase.from("reading_history")
+      .select("book_code, chapter, read_at")
+      .eq("user_id", userId)
+      .order("read_at", { ascending: false })
+      .limit(100),
+    supabase.from("user_preferences")
+      .select("theme, font_family, font_size, current_translation, avatar_url, full_name, bio, social_name, birth_date, marital_status, gender")
+      .eq("user_id", userId)
+      .maybeSingle()
+  ]);
+  if (historyResult.error) throw historyResult.error;
+  if (prefResult.error) throw prefResult.error;
+
+  // 1. Marcações, notas e favoritos
   state.highlights = {};
-  if (highlights) {
-    highlights.forEach(row => {
-      state.highlights[row.verse_key] = row.color_class;
-    });
-  }
+  highlights.forEach(row => { state.highlights[row.verse_key] = row.color_class; });
 
-  // 2. Buscar Notas (Notes)
-  const { data: notes } = await supabase.from("notes").select("verse_key, content").eq("user_id", userId).limit(50000);
   state.notes = {};
-  if (notes) {
-    notes.forEach(row => {
-      state.notes[row.verse_key] = row.content;
-    });
-  }
+  notes.forEach(row => { state.notes[row.verse_key] = row.content; });
 
-  // 3. Buscar Favoritos (Favorites)
-  const { data: favorites } = await supabase.from("favorites").select("verse_key").eq("user_id", userId).limit(50000);
-  state.favorites = [];
-  if (favorites) {
-    state.favorites = favorites.map(row => row.verse_key);
-  }
+  state.favorites = favorites.map(row => row.verse_key);
 
-  // 3.1 Buscar Versículos Lidos
-  const { data: readVerses } = await supabase.from("read_verses").select("verse_key").eq("user_id", userId).limit(50000);
-  if (!state.readStatus) state.readStatus = { verses: [], chapters: [] };
-  if (!state.readStatus.verses) state.readStatus.verses = [];
-  if (readVerses) {
-    state.readStatus.verses = readVerses.map(row => row.verse_key);
-  }
+  // 2. Status de leitura
+  state.readStatus = {
+    verses: readVerses.map(row => row.verse_key),
+    chapters: readChapters.map(row => row.chapter_key),
+    books: readBooks.map(row => row.book_key)
+  };
 
-  // 3.2 Buscar Capítulos Lidos
-  const { data: readChapters } = await supabase.from("read_chapters").select("chapter_key").eq("user_id", userId).limit(5000);
-  if (!state.readStatus.chapters) state.readStatus.chapters = [];
-  if (readChapters) {
-    state.readStatus.chapters = readChapters.map(row => row.chapter_key);
-  }
+  // 3. Planos de leitura (o plano ativo continua sendo o escolhido neste aparelho)
+  const activePlanId = (state.readingPlans && state.readingPlans.activePlanId) || "";
+  state.readingPlans = { activePlanId, progress: {} };
+  plans.forEach(row => {
+    state.readingPlans.progress[row.day_key] = row.completed;
+    if (row.plan_id && !state.readingPlans.activePlanId) {
+      state.readingPlans.activePlanId = row.plan_id;
+    }
+  });
 
-  // 3.3 Buscar Livros Lidos
-  const { data: readBooks } = await supabase.from("read_books").select("book_key").eq("user_id", userId).limit(5000);
-  if (!state.readStatus.books) state.readStatus.books = [];
-  if (readBooks) {
-    state.readStatus.books = readBooks.map(row => row.book_key);
-  }
-
-  // 4. Buscar Plano de Leitura
-  const { data: plans } = await supabase.from("reading_plans").select("plan_id, day_key, completed").eq("user_id", userId).limit(10000);
-  state.readingPlans = { activePlanId: state.readingPlans.activePlanId || "", progress: {} };
-  if (plans) {
-    plans.forEach(row => {
-      state.readingPlans.progress[row.day_key] = row.completed;
-      if (row.plan_id && !state.readingPlans.activePlanId) {
-        state.readingPlans.activePlanId = row.plan_id;
-      }
-    });
-  }
-
-  // 5. Buscar Histórico (ordenado pelo lido mais recentemente)
-  const { data: history } = await supabase.from("reading_history")
-    .select("book_code, chapter, read_at")
-    .eq("user_id", userId)
-    .order("read_at", { ascending: false })
-    .limit(15);
-  
+  // 4. Histórico: o banco guarda uma linha por visita, então mantém só a mais recente de cada capítulo
   state.history = [];
-  if (history) {
-    state.history = history.map(row => {
-      // Procurar nome amigável do livro
-      const bookObj = typeof BIBLE_BOOKS !== "undefined" ? BIBLE_BOOKS.find(b => b.abbrev === row.book_code) : null;
-      return {
-        book: row.book_code,
-        bookName: bookObj ? bookObj.name : row.book_code.toUpperCase(),
-        chapter: row.chapter,
-        time: row.read_at
-      };
+  const seenChapters = new Set();
+  (historyResult.data || []).forEach(row => {
+    const chapterKey = `${row.book_code}-${row.chapter}`;
+    if (seenChapters.has(chapterKey) || state.history.length >= 15) return;
+    seenChapters.add(chapterKey);
+    // Procurar nome amigável do livro
+    const bookObj = typeof BIBLE_BOOKS !== "undefined" ? BIBLE_BOOKS.find(b => b.abbrev === row.book_code) : null;
+    state.history.push({
+      book: row.book_code,
+      bookName: bookObj ? bookObj.name : row.book_code.toUpperCase(),
+      chapter: row.chapter,
+      time: row.read_at
     });
-  }
+  });
 
-  // 6. Buscar Preferências do Usuário
-  const { data: pref, error } = await supabase.from("user_preferences").select("theme, font_family, font_size, current_translation, avatar_url, full_name, bio, social_name, birth_date, marital_status, gender").eq("user_id", userId).maybeSingle();
-  
-  if (error) {
-    console.error("Erro ao puxar dados:", error.message);
-  }
-
+  // 5. Preferências do usuário
+  const pref = prefResult.data;
   if (pref) {
-    // Alerta de debug removido
-
     state.theme = pref.theme || state.theme;
     state.fontFamily = pref.font_family || state.fontFamily;
     state.fontSize = pref.font_size || state.fontSize;
@@ -1182,120 +1246,61 @@ async function pullDataFromCloud(userId) {
     state.birthDate = pref.birth_date || "";
     state.maritalStatus = pref.marital_status || "";
     state.gender = pref.gender || "";
-    
+
     if (typeof updateGreeting === "function") updateGreeting();
-    
-    // Atualiza a exibição da foto de perfil
-    updateAvatarUI(state.avatarUrl);
-    
+
     // Aplicar as preferências baixadas no layout do app
     if (typeof applyPreferences === "function") {
       applyPreferences();
     }
-  } else {
-    // Garante que o avatar local é desenhado na UI se não tiver prefs no Supabase
-    updateAvatarUI(state.avatarUrl);
   }
+  // Atualiza a exibição da foto de perfil (a local, se não houver prefs no Supabase)
+  updateAvatarUI(state.avatarUrl);
 }
 
 // ==========================================================================
 // FUNÇÕES AUXILIARES DE SINCRONIZAÇÃO EM TEMPO REAL (Para usar em app.js)
+// Todas passam pela fila (cloudWrite) e resolvem true quando a alteração chegou à nuvem.
 // ==========================================================================
 
-// Envia uma única alteração de marcação em tempo real
-async function cloudSaveHighlight(verseKey, colorClass) {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    if (colorClass) {
-      await supabase.from("highlights").upsert({
-        user_id: userId,
-        verse_key: verseKey,
-        color_class: colorClass
-      }, { onConflict: "user_id,verse_key" });
-    } else {
-      await supabase.from("highlights").delete().eq("user_id", userId).eq("verse_key", verseKey);
-    }
-  } catch (error) {
-    console.error("Erro ao salvar marcação em tempo real na nuvem:", error);
-  }
+// Envia uma única alteração de marcação
+function cloudSaveHighlight(verseKey, colorClass) {
+  return cloudWrite(colorClass
+    ? { table: "highlights", action: "upsert", onConflict: "user_id,verse_key", row: { verse_key: verseKey, color_class: colorClass } }
+    : { table: "highlights", action: "delete", match: { verse_key: verseKey } });
 }
 
-// Envia uma única nota em tempo real
-async function cloudSaveNote(verseKey, content) {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    if (content && content.trim() !== "") {
-      await supabase.from("notes").upsert({
-        user_id: userId,
-        verse_key: verseKey,
-        content: content.trim()
-      }, { onConflict: "user_id,verse_key" });
-    } else {
-      await supabase.from("notes").delete().eq("user_id", userId).eq("verse_key", verseKey);
-    }
-  } catch (error) {
-    console.error("Erro ao salvar anotação em tempo real na nuvem:", error);
-  }
+// Envia uma única nota
+function cloudSaveNote(verseKey, content) {
+  const text = content ? content.trim() : "";
+  return cloudWrite(text
+    ? { table: "notes", action: "upsert", onConflict: "user_id,verse_key", row: { verse_key: verseKey, content: text } }
+    : { table: "notes", action: "delete", match: { verse_key: verseKey } });
 }
 
-// Envia uma única alteração de favorito em tempo real
-async function cloudSaveFavorite(verseKey, isAdding) {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    if (isAdding) {
-      await supabase.from("favorites").upsert({
-        user_id: userId,
-        verse_key: verseKey
-      }, { onConflict: "user_id,verse_key" });
-    } else {
-      await supabase.from("favorites").delete().eq("user_id", userId).eq("verse_key", verseKey);
-    }
-  } catch (error) {
-    console.error("Erro ao salvar favorito em tempo real na nuvem:", error);
-  }
+// Envia uma única alteração de favorito
+function cloudSaveFavorite(verseKey, isAdding) {
+  return cloudWrite(isAdding
+    ? { table: "favorites", action: "upsert", onConflict: "user_id,verse_key", row: { verse_key: verseKey } }
+    : { table: "favorites", action: "delete", match: { verse_key: verseKey } });
 }
 
-// Envia uma navegação de histórico em tempo real
-async function cloudAddHistory(book, chapter) {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    await supabase.from("reading_history").insert({
-      user_id: userId,
-      book_code: book,
-      chapter: chapter
-    });
-  } catch (error) {
-    console.error("Erro ao salvar histórico de leitura na nuvem:", error);
-  }
+// Envia uma navegação de histórico
+function cloudAddHistory(book, chapter) {
+  return cloudWrite({
+    table: "reading_history",
+    action: "insert",
+    row: { book_code: book, chapter: chapter, read_at: new Date().toISOString() }
+  });
 }
 
-// Envia progresso do plano de leitura em tempo real
-async function cloudSaveReadingPlanDay(planId, dayKey, completed) {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    await supabase.from("reading_plans").upsert({
-      user_id: userId,
-      plan_id: planId,
-      day_key: dayKey,
-      completed: completed
-    }, { onConflict: "user_id,plan_id,day_key" });
-  } catch (error) {
-    console.error("Erro ao salvar progresso do plano de leitura na nuvem:", error);
-  }
-}
-
-// Envia preferências visuais do usuário em tempo real
-async function cloudSavePreferences() {
-  if (!supabase || !syncState.isLoggedIn) return;
-  try {
-    const userId = syncState.currentUser.id;
-    const payload = {
-      user_id: userId,
+// Envia as preferências visuais e os dados do perfil
+function cloudSavePreferences() {
+  return cloudWrite({
+    table: "user_preferences",
+    action: "upsert",
+    onConflict: "user_id",
+    row: {
       theme: state.theme,
       font_family: state.fontFamily,
       font_size: state.fontSize,
@@ -1307,26 +1312,8 @@ async function cloudSavePreferences() {
       birth_date: state.birthDate || null,
       marital_status: state.maritalStatus || null,
       gender: state.gender || null
-    };
-    
-    const { data, error } = await supabase.from("user_preferences").upsert(payload, { onConflict: "user_id" }).select();
-    
-    if (error) {
-      console.error("Supabase Error ao salvar prefs:", error);
-      if (typeof showToast === "function") {
-        showToast("Erro ao salvar preferências no banco de dados.", "error");
-      }
-      throw error;
     }
-
-    if (data && data.length > 0) {
-      console.log("Upsert Success Data:", data[0]);
-      // Alerta de debug removido
-    }
-  } catch (error) {
-    console.error("Erro ao salvar preferências visuais na nuvem:", error);
-    throw error;
-  }
+  });
 }
 
 // Atualiza as imagens de avatar na interface

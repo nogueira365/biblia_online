@@ -226,12 +226,15 @@ window.toggleVerseReadState = function(verseKey, verseEl, forceState) {
       
       // Agora marcar todos os outros versículos como lidos individualmente
       const totalVerses = document.querySelectorAll('.verse-item').length;
+      const newlyReadVerses = [];
       for(let i=1; i<=totalVerses; i++) {
         const vk = `${currentBook}-${currentChapter}-${i}`;
         if (vk !== verseKey && !state.readStatus.verses.includes(vk)) {
           state.readStatus.verses.push(vk);
+          newlyReadVerses.push(vk);
         }
       }
+      if (typeof cloudSaveReadVerses === "function") cloudSaveReadVerses(newlyReadVerses);
     }
     
     const index = state.readStatus.verses.indexOf(verseKey);
@@ -1856,13 +1859,10 @@ async function renderFavoritesAndNotes() {
         const favIndex = state.favorites.indexOf(verseKey);
         if (favIndex > -1) state.favorites.splice(favIndex, 1);
 
-        // Excluir na nuvem se estiver logado
-        if (typeof syncState !== "undefined" && syncState.isLoggedIn && typeof supabase !== "undefined") {
-          const userId = syncState.currentUser.id;
-          supabase.from("highlights").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
-          supabase.from("notes").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
-          supabase.from("favorites").delete().eq("user_id", userId).eq("verse_key", verseKey).then();
-        }
+        // Excluir na nuvem (via fila de sincronização)
+        if (typeof cloudSaveHighlight === "function") cloudSaveHighlight(verseKey, "");
+        if (typeof cloudSaveNote === "function") cloudSaveNote(verseKey, "");
+        if (typeof cloudSaveFavorite === "function") cloudSaveFavorite(verseKey, false);
 
         // Atualizar o DOM se estiver na página atual
         const activeVerseEl = document.querySelector(`.verse-item[data-verse-key="${verseKey}"]`);
