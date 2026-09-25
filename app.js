@@ -104,6 +104,12 @@ document.addEventListener("keydown", (e) => {
   target.click();
 });
 
+// Layout de celular: mesma condição usada no CSS (inclui celular deitado, com pouca altura)
+const MOBILE_LAYOUT_QUERY = "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
+function isMobileLayout() {
+  return window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
+}
+
 // Exibe a landing page novamente (ao clicar no home do breadcrumb)
 function showLandingPage() {
   const landingPage = document.getElementById("landing-page");
@@ -586,6 +592,7 @@ function initUI() {
   // Botões de navegação inferior
   document.getElementById("btn-prev-chapter").addEventListener("click", navigatePrevChapter);
   document.getElementById("btn-next-chapter").addEventListener("click", navigateNextChapter);
+  document.getElementById("btn-end-next").addEventListener("click", navigateNextChapter);
 
   // Responsividade: Botão para abrir o menu lateral no mobile
   const btnMenuMobile = document.getElementById("btn-mobile-menu");
@@ -723,7 +730,7 @@ function closeAllDrawers() {
   }
   
   // Se estiver no mobile, também fecha o sidebar
-  if (window.innerWidth <= 768) {
+  if (isMobileLayout()) {
     document.querySelector(".sidebar-pane").classList.remove("open");
   }
 }
@@ -846,7 +853,7 @@ function renderChaptersGrid() {
       loadActiveChapter();
       
       // No mobile, fecha o sidebar ao selecionar
-      if (window.innerWidth <= 768) {
+      if (isMobileLayout()) {
         document.querySelector(".sidebar-pane").classList.remove("open");
         document.getElementById("overlay").classList.remove("active");
       }
@@ -1054,7 +1061,7 @@ async function loadActiveChapter() {
         </svg>
         <span class="btn-text">${isBookReadFlag ? "Desmarcar Livro" : "Marcar Livro como Lido"}</span>
       `;
-      btnMarkEntireBookRead.className = isBookReadFlag ? "btn-secondary btn-read-active" : "btn-secondary";
+      btnMarkEntireBookRead.className = isBookReadFlag ? "btn-link btn-read-active" : "btn-link";
     }
     
     chapterTitleEl.innerHTML = `
@@ -1081,6 +1088,8 @@ async function loadActiveChapter() {
     // Atualizar Pills do cabeçalho
     document.getElementById("pill-book").textContent = bookData.name;
     document.getElementById("pill-chapter").textContent = state.currentChapter;
+    document.getElementById("chapter-end-ref").textContent = `${bookData.name} ${state.currentChapter}`;
+    document.getElementById("chapter-end-card").hidden = false;
 
     // Renderizar versículos
     versesContainer.innerHTML = "";
@@ -1250,6 +1259,7 @@ async function loadActiveChapter() {
   } catch (error) {
     if (isStale()) return; // uma navegação mais nova já assumiu a tela
     console.error("Erro ao carregar capítulo:", error);
+    document.getElementById("chapter-end-card").hidden = true;
     showToast("Erro ao carregar os dados locais do capítulo.", "error");
 
     // Tela de Erro Amigável
@@ -1393,20 +1403,26 @@ function updateBottomNavigationUI() {
   }
 
   // Próximo
+  const endNextBtn = document.getElementById("btn-end-next");
+  const endNextText = document.getElementById("btn-end-next-text");
   if (state.currentChapter === bookData.chapters && bookIndex === BIBLE_BOOKS.length - 1) {
     nextBtn.classList.add("disabled");
     setNavBtnText(nextBtn, "Fim", "Fim");
+    if (endNextBtn) endNextBtn.hidden = true;
   } else {
+    if (endNextBtn) endNextBtn.hidden = false;
     nextBtn.classList.remove("disabled");
     if (state.currentChapter < bookData.chapters) {
       const fullName  = `${bookData.name} ${state.currentChapter + 1}`;
       const shortName = `${formatAbbrev(bookData.abbrev)} ${state.currentChapter + 1}`;
       setNavBtnText(nextBtn, fullName, shortName);
+      if (endNextText) endNextText.textContent = `Próximo: ${fullName}`;
     } else {
       const nextBook  = BIBLE_BOOKS[bookIndex + 1];
       const fullName  = `${nextBook.name} 1`;
       const shortName = `${formatAbbrev(nextBook.abbrev)} 1`;
       setNavBtnText(nextBtn, fullName, shortName);
+      if (endNextText) endNextText.textContent = `Próximo: ${fullName}`;
     }
   }
 }

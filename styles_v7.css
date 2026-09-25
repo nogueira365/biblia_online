@@ -826,7 +826,7 @@ header {
   display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .nav-btn.nav-btn-center {
     display: flex;
   }
@@ -871,7 +871,7 @@ header {
 .nav-text-full  { display: inline; }
 .nav-text-short { display: none; }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .nav-text-full  { display: none; }
   .nav-text-short { display: inline; }
 }
@@ -1469,7 +1469,7 @@ header {
 }
 
 /* Responsividade Mobile */
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   header {
     padding: 0 16px;
   }
@@ -1654,7 +1654,7 @@ header {
   padding-right: 48px !important;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .comparison-header {
     grid-template-columns: 1fr;
     gap: 8px;
@@ -1713,48 +1713,6 @@ header {
   background-color: var(--accent-color);
   color: #ffffff;
   border-color: var(--accent-color);
-}
-
-/* ==========================================================================
-   Estilos de Cabeçalho Fixo (Sticky Header Styles)
-   ========================================================================== */
-.reader-header-sticky {
-  position: sticky;
-  top: -40px;
-  /* Alinha com o padding-top do .reader-pane */
-  background-color: var(--bg-primary);
-  z-index: 10;
-  padding-top: 40px;
-  /* Cobre o espaço de padding-top com background */
-  margin-top: -40px;
-  /* Puxa o conteúdo de volta */
-  padding-bottom: 16px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--border-color);
-  /* Expande para preencher toda a largura do reader-pane sem espaços laterais */
-  margin-left: -60px;
-  margin-right: -60px;
-  padding-left: 60px;
-  padding-right: 60px;
-}
-
-.reader-header-sticky-content {
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-  .reader-header-sticky {
-    top: -24px;
-    /* Alinha com o padding-top de mobile */
-    padding-top: 24px;
-    margin-top: -24px;
-    /* Ajusta para o padding de mobile */
-    margin-left: -20px;
-    margin-right: -20px;
-    padding-left: 20px;
-    padding-right: 20px;
-  }
 }
 
 /* ==========================================================================
@@ -3157,7 +3115,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* Landing Page Responsivo */
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
   .landing-title {
     font-size: 36px;
   }
@@ -3268,4 +3226,311 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 .pwa-install-actions button.pwa-btn-primary:hover {
   background: var(--accent-hover);
+}
+/* ==========================================================================
+   Fundamentos e responsividade
+   Breakpoints: celular ≤ 768px (inclui celular deitado: altura ≤ 500px com toque),
+   tablet 769–1024px, PC ≥ 1025px.
+   ========================================================================== */
+
+/* Controles de formulário usam a fonte da marca (antes: fonte do sistema) */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* Breadcrumb acima do título: rola junto com o texto */
+.reader-intro {
+  max-width: 720px;
+  margin: 0 auto;
+  padding-top: 32px;
+}
+
+.reader-intro .breadcrumb {
+  margin-bottom: 4px;
+}
+
+/* Cabeçalho fixo do leitor: apenas a linha do título fica presa no topo */
+.reader-pane {
+  padding-top: 0;
+}
+
+.reader-header-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  /* Ocupa toda a largura do painel de leitura */
+  margin: 0 -60px 24px;
+  padding: 10px 60px;
+}
+
+.reader-header-sticky-content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.reader-header-sticky .chapter-title {
+  margin-bottom: 0;
+  min-height: 44px;
+}
+
+/* Rótulo curto do dropdown (ex.: "NVI"), usado em telas menores */
+.cs-text-short {
+  display: none;
+}
+
+/* Cartão de fim de capítulo */
+.chapter-end-card {
+  margin: 40px 0 16px;
+  padding: 24px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background-color: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  /* Fonte de interface, não a fonte de leitura do texto bíblico */
+  font-family: 'Outfit', sans-serif;
+}
+
+.chapter-end-card[hidden] {
+  display: none;
+}
+
+.chapter-end-title {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.chapter-end-title span {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.chapter-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.chapter-end-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 18px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+.chapter-end-actions button[hidden] {
+  display: none;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-link:hover {
+  color: var(--accent-color);
+  background-color: var(--accent-muted);
+}
+
+/* ---------- Tablet (769–1024px) ---------- */
+@media (min-width: 769px) and (max-width: 1024px) and (min-height: 501px) {
+  header {
+    padding: 0 16px;
+  }
+
+  .logo-text {
+    white-space: nowrap;
+  }
+
+  .top-pills {
+    margin-left: 12px;
+  }
+
+  /* Livro e capítulo já aparecem no título; no tablet o espaço vai para as ações */
+  #pill-book,
+  #pill-chapter {
+    display: none;
+  }
+
+  .cs-wrapper.cs-pill .cs-text-full {
+    display: none;
+  }
+
+  .cs-wrapper.cs-pill .cs-text-short {
+    display: inline;
+  }
+
+  .sidebar-pane {
+    width: 260px;
+  }
+
+  .main-container:not(.sidebar-collapsed) .bottom-nav-bar {
+    right: 260px;
+  }
+
+  .reader-pane {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+
+  .reader-header-sticky {
+    margin-left: -32px;
+    margin-right: -32px;
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
+
+/* ---------- Celular (inclui celular deitado) ---------- */
+@media (max-width: 768px), (max-height: 500px) and (pointer: coarse) {
+  /* Fundo sólido: backdrop-filter faria o painel de traduções (position: fixed)
+     se posicionar dentro do cabeçalho em vez da tela */
+  header {
+    background-color: var(--bg-primary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    /* Acima da barra inferior (1000), para o painel de traduções não ficar coberto */
+    z-index: 1001;
+  }
+
+  .logo-container {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .logo-text {
+    white-space: nowrap;
+  }
+
+  /* Seletor de tradução visível no celular, como chip compacto ("NVI ▾") */
+  .top-pills {
+    display: flex;
+    margin-left: auto;
+    margin-right: 6px;
+  }
+
+  #pill-book,
+  #pill-chapter {
+    display: none;
+  }
+
+  .cs-wrapper.cs-pill .cs-text-full {
+    display: none;
+  }
+
+  .cs-wrapper.cs-pill .cs-text-short {
+    display: inline;
+  }
+
+  .cs-wrapper.cs-pill .cs-trigger {
+    padding: 0 10px 0 14px;
+  }
+
+  /* Lista de traduções como painel inferior (bottom sheet) */
+  .cs-wrapper.cs-pill .cs-panel {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    z-index: 10002;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+    /* A sombra gigante escurece a tela atrás do painel */
+    box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.5);
+    transform: translateY(24px);
+    transform-origin: bottom center;
+  }
+
+  .cs-wrapper.cs-pill.cs-open .cs-panel {
+    transform: translateY(0);
+  }
+
+  .cs-wrapper.cs-pill .cs-panel::before {
+    content: "Escolha a tradução";
+    display: block;
+    padding: 4px 18px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 6px;
+  }
+
+  .cs-wrapper.cs-pill .cs-panel-inner {
+    max-height: 60vh;
+  }
+
+  .cs-wrapper.cs-pill .cs-option {
+    padding: 13px 18px;
+    font-size: 15px;
+  }
+
+  /* Leitor */
+  .reader-pane {
+    padding-top: 0;
+  }
+
+  .reader-intro {
+    padding-top: 12px;
+  }
+
+  .reader-header-sticky {
+    margin: 0 -20px 16px;
+    padding: 6px 20px;
+  }
+
+  .chapter-title {
+    font-size: 22px;
+  }
+
+  /* Alvos de toque maiores */
+  .verse-read-checkbox {
+    width: 20px;
+    height: 20px;
+  }
+
+  .color-dot {
+    width: 32px;
+    height: 32px;
+  }
+
+  .chapter-end-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .chapter-end-actions button {
+    justify-content: center;
+    width: 100%;
+    min-height: 46px;
+  }
+}
+
+/* Telas muito estreitas: esconde o nome ao lado do logo para caber o chip de tradução */
+@media (max-width: 360px) {
+  .logo-text {
+    display: none;
+  }
 }

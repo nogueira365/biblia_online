@@ -158,9 +158,19 @@
 
     function syncFromOriginal() {
       const selectedOpt = selectEl.options[selectEl.selectedIndex];
-      triggerText.textContent = selectedOpt
-        ? selectedOpt.textContent
-        : "Selecione...";
+      const fullText = selectedOpt ? selectedOpt.textContent : "Selecione...";
+      // Opções com data-short (ex.: "NVI") ganham um rótulo curto, exibido em telas pequenas
+      if (selectedOpt && selectedOpt.dataset.short) {
+        const full = document.createElement("span");
+        full.className = "cs-text-full";
+        full.textContent = fullText;
+        const short = document.createElement("span");
+        short.className = "cs-text-short";
+        short.textContent = selectedOpt.dataset.short;
+        triggerText.replaceChildren(full, short);
+      } else {
+        triggerText.textContent = fullText;
+      }
 
       // Marcar opção ativa no painel
       panel.querySelectorAll(".cs-option").forEach((item) => {

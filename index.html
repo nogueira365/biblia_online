@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt" crossorigin="anonymous">
   
   <!-- Estilos Customizados (carregados por último para ter precedência) -->
-  <link rel="stylesheet" href="styles_v7.css?v=16.0">
+  <link rel="stylesheet" href="styles_v7.css?v=17.0">
   
   <!-- Chaves e Configurações do Supabase -->
   <script src="config.js" defer></script>
@@ -44,10 +44,10 @@
   <script src="reading_plans.js?v=1.0" defer></script>
   
   <!-- Sistema de Dropdowns Customizados (flat, minimalista) -->
-  <script src="custom-select_v3.js?v=2.0" defer></script>
+  <script src="custom-select_v3.js?v=3.0" defer></script>
 
   <!-- Lógica Principal do Aplicativo -->
-  <script src="app.js?v=18.0" defer></script>
+  <script src="app.js?v=19.0" defer></script>
 
   <!-- Lógica de PWA (Instalação e Service Worker) -->
   <script src="pwa.js?v=16.0" defer></script>
@@ -137,19 +137,19 @@
                 class="pill-select auto-custom-select"
                 data-cs-class="cs-pill"
                 aria-label="Selecionar tradução">
-          <option value="acf">ACF - Corrigida e Fiel</option>
-          <option value="ara">ARA - Revista e Atualizada</option>
-          <option value="arc">ARC - Revista e Corrigida</option>
-          <option value="as21">AS21 - Almeida Século 21</option>
-          <option value="jfaa">JFAA - Ferreira de Almeida</option>
-          <option value="kja">KJA - King James Atualizada</option>
-          <option value="kjf">KJF - King James Fiel</option>
-          <option value="naa">NAA - Nova Almeida Atualizada</option>
-          <option value="nbv">NBV - Nova Bíblia Viva</option>
-          <option value="ntlh">NTLH - Linguagem de Hoje</option>
-          <option value="nvi">NVI - Nova Versão Internacional</option>
-          <option value="nvt">NVT - Nova Versão Transformadora</option>
-          <option value="tb">TB - Tradução Brasileira</option>
+          <option value="acf" data-short="ACF">ACF - Corrigida e Fiel</option>
+          <option value="ara" data-short="ARA">ARA - Revista e Atualizada</option>
+          <option value="arc" data-short="ARC">ARC - Revista e Corrigida</option>
+          <option value="as21" data-short="AS21">AS21 - Almeida Século 21</option>
+          <option value="jfaa" data-short="JFAA">JFAA - Ferreira de Almeida</option>
+          <option value="kja" data-short="KJA">KJA - King James Atualizada</option>
+          <option value="kjf" data-short="KJF">KJF - King James Fiel</option>
+          <option value="naa" data-short="NAA">NAA - Nova Almeida Atualizada</option>
+          <option value="nbv" data-short="NBV">NBV - Nova Bíblia Viva</option>
+          <option value="ntlh" data-short="NTLH">NTLH - Linguagem de Hoje</option>
+          <option value="nvi" data-short="NVI">NVI - Nova Versão Internacional</option>
+          <option value="nvt" data-short="NVT">NVT - Nova Versão Transformadora</option>
+          <option value="tb" data-short="TB">TB - Tradução Brasileira</option>
         </select>
 
       </div>
@@ -272,10 +272,8 @@
     
     <!-- Painel de Leitura (Esquerda/Centro) -->
     <section id="reader-pane" class="reader-pane size-md font-serif">
-      <!-- Cabeçalho Fixo do Leitor (Visível no topo ao rolar, ocupa largura total) -->
-      <div class="reader-header-sticky">
-        <div class="reader-header-sticky-content">
-          <!-- Breadcrumbs dinâmicos -->
+      <!-- Breadcrumb (rola junto com o texto) -->
+      <div class="reader-intro">
           <nav class="breadcrumb" aria-label="Localização da leitura">
             <button id="bc-home" class="breadcrumb-home" aria-label="Ir para a tela inicial" title="Tela Inicial">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -286,30 +284,19 @@
             <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
             <strong id="bc-chapter" style="color: var(--text-primary);">Capítulo 28</strong>
           </nav>
+      </div>
 
+      <!-- Cabeçalho Fixo do Leitor: só a linha do título fica presa no topo ao rolar -->
+      <div class="reader-header-sticky">
+        <div class="reader-header-sticky-content">
           <h1 id="chapter-title" class="chapter-title">
              <span>Provérbios 28</span>
           </h1>
-          <div style="display: flex; justify-content: flex-end; width: 100%; margin-bottom: 8px;">
-            <button id="btn-mark-book-read" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; display: flex; align-items: center; gap: 6px;">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              <span class="btn-text">Marcar Capítulo como Lido</span>
-            </button>
-            <button id="btn-mark-entire-book-read" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; display: flex; align-items: center; gap: 6px; margin-left: 8px;">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-              </svg>
-              <span class="btn-text">Marcar Livro como Lido</span>
-            </button>
-          </div>
-          
-          <div id="comparison-header-container"></div>
         </div>
       </div>
 
       <div class="reader-container">
+        <div id="comparison-header-container"></div>
 
         <!-- ✨ VERSÍCULO DO DIA -->
         <div id="verse-of-day-container" class="vod-container" style="display:none;" aria-label="Versículo do Dia">
@@ -346,6 +333,29 @@
           <!-- Versículos serão inseridos aqui dinamicamente -->
           <div id="verses-container" class="verses-container"></div>
         </article>
+
+        <!-- Cartão de fim de capítulo: concluir a leitura e seguir para o próximo -->
+        <div id="chapter-end-card" class="chapter-end-card">
+          <p class="chapter-end-title">Fim de <span id="chapter-end-ref">Provérbios 28</span></p>
+          <div class="chapter-end-actions">
+            <button id="btn-mark-book-read" class="btn-secondary">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span class="btn-text">Marcar Capítulo como Lido</span>
+            </button>
+            <button id="btn-end-next" class="btn-primary">
+              <span id="btn-end-next-text">Próximo capítulo</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+            </button>
+          </div>
+          <button id="btn-mark-entire-book-read" class="btn-link">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span class="btn-text">Marcar Livro como Lido</span>
+          </button>
+        </div>
       </div>
     </section>
 
