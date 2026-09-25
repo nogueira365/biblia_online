@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" integrity="sha384-RkASv+6KfBMW9eknReJIJ6b3UnjKOKC5bOUaNgIY778NFbQ8MtWq9Lr/khUgqtTt" crossorigin="anonymous">
   
   <!-- Estilos Customizados (carregados por último para ter precedência) -->
-  <link rel="stylesheet" href="styles_v7.css?v=19.0">
+  <link rel="stylesheet" href="styles_v7.css?v=20.0">
   
   <!-- Chaves e Configurações do Supabase -->
   <script src="config.js" defer></script>
@@ -47,7 +47,7 @@
   <script src="custom-select_v3.js?v=3.0" defer></script>
 
   <!-- Lógica Principal do Aplicativo -->
-  <script src="app.js?v=21.0" defer></script>
+  <script src="app.js?v=22.0" defer></script>
 
   <!-- Lógica de PWA (Instalação e Service Worker) -->
   <script src="pwa.js?v=16.0" defer></script>
@@ -679,7 +679,16 @@
       <button class="btn-icon drawer-close" aria-label="Fechar configurações">✕</button>
     </div>
     <div class="drawer-body">
-      
+
+      <!-- Prévia ao vivo das opções de leitura -->
+      <div class="settings-group">
+        <div class="settings-label">Prévia</div>
+        <div id="settings-preview" class="settings-preview size-md font-serif lh-normal">
+          <p class="settings-preview-text"><span class="verse-number">1</span> O Senhor é o meu pastor; de nada terei falta. <span class="verse-number">2</span> Em verdes pastagens me faz repousar e conduz-me a águas tranquilas.</p>
+          <span id="settings-preview-ref" class="settings-preview-ref">Salmos 23:1-2</span>
+        </div>
+      </div>
+
       <!-- Escolha de Tema -->
       <div class="settings-group">
         <div class="settings-label">Tema Visual</div>
@@ -708,6 +717,26 @@
           <button class="size-btn active" data-size-opt="md">Padrão</button>
           <button class="size-btn" data-size-opt="lg">A+</button>
           <button class="size-btn" data-size-opt="xl">A++</button>
+        </div>
+      </div>
+
+      <!-- Espaçamento entre linhas -->
+      <div class="settings-group">
+        <div class="settings-label">Espaçamento entre Linhas</div>
+        <div class="size-options">
+          <button class="opt-btn lh-btn" data-lh="compact">Compacto</button>
+          <button class="opt-btn lh-btn active" data-lh="normal">Padrão</button>
+          <button class="opt-btn lh-btn" data-lh="relaxed">Amplo</button>
+        </div>
+      </div>
+
+      <!-- Largura da coluna (só faz diferença em telas largas) -->
+      <div class="settings-group settings-group-wide-only">
+        <div class="settings-label">Largura do Texto</div>
+        <div class="size-options">
+          <button class="opt-btn width-btn" data-width="sm">Estreita</button>
+          <button class="opt-btn width-btn active" data-width="md">Média</button>
+          <button class="opt-btn width-btn" data-width="lg">Larga</button>
         </div>
       </div>
 

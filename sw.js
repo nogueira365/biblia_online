@@ -10,7 +10,7 @@
 //
 // Ao alterar os arquivos de data/, incremente DATA_CACHE para forçar um novo download.
 
-const SHELL_CACHE = "biblia-shell-v4";
+const SHELL_CACHE = "biblia-shell-v5";
 const DATA_CACHE = "biblia-data-v2";
 const ASSET_CACHE = "biblia-assets-v1";
 const ACTIVE_CACHES = [SHELL_CACHE, DATA_CACHE, ASSET_CACHE];

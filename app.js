@@ -7,6 +7,8 @@ const state = {
   currentChapter: 28,      // Capítulo 28 (Padrão)
   currentTranslation: "nvi", // NVI (Padrão)
   fontSize: "md",          // sm, md, lg, xl
+  lineHeight: "normal",    // compact, normal, relaxed
+  columnWidth: "md",       // sm, md, lg (largura da coluna de texto em telas largas)
   fontFamily: "serif",     // serif, sans
   theme: "azul",           // azul, claro, sepia, noturno
   highlights: {},          // { "book-chapter-verse": "hl-color" }
@@ -171,6 +173,8 @@ function loadStateFromLocalStorage() {
       state.currentChapter = parsed.currentChapter || 28;
       state.currentTranslation = parsed.currentTranslation || "nvi";
       state.fontSize = parsed.fontSize || "md";
+      state.lineHeight = parsed.lineHeight || "normal";
+      state.columnWidth = parsed.columnWidth || "md";
       state.fontFamily = parsed.fontFamily || "serif";
       state.theme = parsed.theme || "azul";
       state.highlights = parsed.highlights || {};
@@ -215,6 +219,14 @@ function applyPreferences() {
     readerElement.className = "reader-pane"; // reset
     readerElement.classList.add(`size-${state.fontSize}`);
     readerElement.classList.add(`font-${state.fontFamily}`);
+    readerElement.classList.add(`lh-${state.lineHeight}`);
+    readerElement.classList.add(`col-${state.columnWidth}`);
+  }
+
+  // Prévia nas configurações usa as mesmas classes do leitor
+  const preview = document.getElementById("settings-preview");
+  if (preview) {
+    preview.className = `settings-preview size-${state.fontSize} font-${state.fontFamily} lh-${state.lineHeight}`;
   }
 
   // Atualizar botões visuais nos seletores de configurações
@@ -365,6 +377,14 @@ function updateSettingsButtonsUI() {
   document.querySelectorAll(".size-btn").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-size-opt") === state.fontSize);
   });
+
+  // Espaçamento entre linhas e largura da coluna
+  document.querySelectorAll(".lh-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-lh") === state.lineHeight);
+  });
+  document.querySelectorAll(".width-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-width") === state.columnWidth);
+  });
 }
 
 // Inicializa os elementos da interface e escuta eventos
@@ -430,6 +450,22 @@ function initUI() {
     });
   });
 
+  // Espaçamento entre linhas e largura da coluna (salvos só neste aparelho)
+  document.querySelectorAll(".lh-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.lineHeight = btn.getAttribute("data-lh");
+      saveStateToLocalStorage();
+      applyPreferences();
+    });
+  });
+  document.querySelectorAll(".width-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.columnWidth = btn.getAttribute("data-width");
+      saveStateToLocalStorage();
+      applyPreferences();
+    });
+  });
+
   // Filtro de Busca de Livros
   const searchBookInput = document.getElementById("search-book-input");
   if (searchBookInput) {
@@ -480,7 +516,10 @@ function initUI() {
     });
   }
 
-  document.getElementById("btn-settings").addEventListener("click", () => openDrawer("settings-drawer"));
+  document.getElementById("btn-settings").addEventListener("click", () => {
+    openDrawer("settings-drawer");
+    updateSettingsPreviewText();
+  });
 
   // Botão de Plano de Leitura
   const btnReadingPlan = document.getElementById("btn-reading-plan");
@@ -797,6 +836,17 @@ function initUI() {
   }
 }
 
+
+// Prévia das configurações: Salmos 23:1-2 na tradução atual
+async function updateSettingsPreviewText() {
+  const textEl = document.querySelector("#settings-preview .settings-preview-text");
+  const refEl = document.getElementById("settings-preview-ref");
+  if (!textEl) return;
+  const [v1, v2] = await Promise.all([getVerseTextLocal("sl-23-1"), getVerseTextLocal("sl-23-2")]);
+  if (v1.startsWith("Texto não encontrado")) return; // mantém o texto padrão
+  textEl.innerHTML = `<span class="verse-number">1</span> ${escapeHTML(v1)} <span class="verse-number">2</span> ${escapeHTML(v2)}`;
+  if (refEl) refEl.textContent = `Salmos 23:1-2 (${state.currentTranslation.toUpperCase()})`;
+}
 
 // Fecha todas as gavetas/drawers
 function closeAllDrawers() {
@@ -1361,7 +1411,7 @@ async function loadActiveChapter() {
         verseDiv.setAttribute("data-verse-key", verseKey);
 
         verseDiv.innerHTML = `
-          <input type="checkbox" class="verse-read-checkbox" ${window.isVerseRead(verseKey) ? 'checked' : ''} title="Marcar como lido" style="margin-right: 6px; cursor: pointer; accent-color: var(--accent-color);">
+          <input type="checkbox" class="verse-read-checkbox" ${window.isVerseRead(verseKey) ? 'checked' : ''} title="Marcar como lido" aria-label="Marcar versículo como lido">
           <span class="verse-number">${verseLabel}</span>
           <span class="verse-text">${escapeHTML(verseText)}</span>
           <button class="btn-share-verse-inline" data-verse-key="${verseKey}" title="Compartilhar versículo ${verseLabel}" aria-label="Compartilhar versículo ${verseLabel}">

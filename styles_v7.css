@@ -4016,3 +4016,154 @@ textarea {
     color: var(--text-muted);
   }
 }
+
+/* ==========================================================================
+   Experiência de leitura: largura da coluna, espaçamento, marcação de lido e ícones
+   ========================================================================== */
+
+/* Largura da coluna de texto (configurável) */
+.reader-pane {
+  --reader-width: 720px;
+  --reader-lh: 1.8;
+}
+
+.reader-pane.col-sm {
+  --reader-width: 600px;
+}
+
+.reader-pane.col-lg {
+  --reader-width: 880px;
+}
+
+.reader-container,
+.reader-intro,
+.reader-header-sticky-content {
+  max-width: var(--reader-width);
+}
+
+/* Espaçamento entre linhas (configurável) */
+.lh-compact {
+  --reader-lh: 1.55;
+}
+
+.lh-normal {
+  --reader-lh: 1.8;
+}
+
+.lh-relaxed {
+  --reader-lh: 2.15;
+}
+
+.verses-container {
+  line-height: var(--reader-lh);
+}
+
+/* Versículo lido: ✓ discreto junto ao número, em vez de depender da caixinha */
+.verse-item.is-read {
+  opacity: 0.85;
+}
+
+.verse-item.is-read .verse-number::after {
+  content: "✓";
+  margin-left: 2px;
+}
+
+/* Caixinha de "lido": padrão (tablet/celular) = oculta; a marcação fica no menu do versículo */
+.verse-read-checkbox {
+  display: none;
+  accent-color: var(--accent-color);
+  cursor: pointer;
+}
+
+/* Botões de opção das configurações (mesmo visual dos botões de tamanho) */
+.opt-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.opt-btn.active {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+/* Prévia nas configurações */
+.settings-preview {
+  /* O espaçamento vem da classe lh-* aplicada à prévia (igual ao leitor) */
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background-color: var(--bg-primary);
+}
+
+.settings-preview-text {
+  line-height: var(--reader-lh);
+  color: var(--text-primary);
+}
+
+.settings-preview-ref {
+  display: block;
+  margin-top: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* PC: caixinha de "lido" na margem esquerda, visível ao passar o mouse; ícones com espaço reservado */
+@media (min-width: 1025px) {
+  .verse-item .verse-read-checkbox {
+    display: block;
+    position: absolute;
+    left: -26px;
+    top: calc(6px + 0.35em);
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .verse-item:hover .verse-read-checkbox,
+  .verse-read-checkbox:focus-visible {
+    opacity: 1;
+  }
+
+  /* Espaço à direita para o ícone de compartilhar (e o de nota), sem cobrir o texto */
+  .verses-container > .verse-item {
+    padding-right: 44px;
+  }
+
+  .verses-container > .verse-item.has-note {
+    padding-right: 72px !important;
+  }
+}
+
+/* Telas de toque: o compartilhar "invisível até passar o mouse" não existe; fica no menu do versículo */
+@media (hover: none) {
+  .btn-share-verse-inline {
+    display: none;
+  }
+
+  .verses-container > .verse-item.has-note {
+    padding-right: 40px !important;
+  }
+
+  .btn-verse-note {
+    right: 6px;
+  }
+}
+
+/* Largura do texto só muda algo em telas largas */
+@media (max-width: 1024px) {
+  .settings-group-wide-only {
+    display: none;
+  }
+}
